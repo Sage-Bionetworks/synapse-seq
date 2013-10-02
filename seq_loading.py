@@ -10,7 +10,7 @@ Functions for loading existing sequencing datasets into Synapse.
 #	unit tests
 
 from synapseclient import Project, Folder, File, Activity, Evaluation
-import subprocess
+import subprocess, os
 
 
 def readConfig(configFile):
@@ -55,6 +55,7 @@ def readConfig(configFile):
 				continue
 	allArgDict[stepNum] = workflowDict
 	allArgDict['folderlist'] = foldersToCreate
+	allArgDict['finalStep'] = finalStep
 	return(allArgDict)
 
 
@@ -88,22 +89,31 @@ def str2bool(inString): # this function found on stackoverflow
 	return inString.lower() in ("yes", "true", "t", "1")
 
 
-def add_workflow_step_to_synapse(inFilePath, stepDict, step='1', store=False, cmd=None, software=None, parentid=None ):
+def add_workflow_step_to_synapse(inFilePath, stepDict, step='1', store=False, software=None, parentid=None, syn=None, stepIDs=None, inFilename=None ):
 	'''Uploads files with provenance and annotations to Synapse.'''
-	
-	if not cmd:
-		cmd = stepDict['CMD']
+	if not inFilename:
+		inFilename = os.path.basename(inFilePath.strip())
 	if not software:
-		cmd = stepDict['softwareName']
-	usedList = stepDict['used'].strip().split(',')
-#	if 'depends' in allArgDict[step]:
-#		usedList.append(stepIDs[step])
+		software = stepDict['softwareName']
+	if 'used' in stepDict:
+		usedList = stepDict['used'].strip().split(',')
+		if 'depends' in stepDict:
+			usedList.append(stepIDs[stepDict['depends']])
+	elif 'depends' in stepDict:
+		usedList = stepIDs[stepDict['depends']]
+	execList = stepDict['executed'].strip().split(';')
 
-	act = Activity(name=stepDict['actName'],  description=cmd)
+	act = Activity(name=stepDict['actName'],  description=stepDict['description'])
 	act.used(usedList)
-	act.executed(stepDict['URL'], name = software)
-	step_file = File(filePath, description=stepDict['fileDescription'], parentId=parentid, synapseStore=str2bool(stepDict['store']))
-	
+	for item in execList:
+		splitItem = item.split(',')
+		target = splitItem[0]
+		version = 1
+		if (len(splitItem) > 1):
+			version = splitItem[1]
+		act.executed(target=target, targetVersion=version)
+
+	step_file = File(inFilePath, name=inFilename, description=stepDict['fileDescription'], parentId=parentid, synapseStore=str2bool(stepDict['store']))	
 	step_file = syn.store(step_file, activity=act)
 	syn.setAnnotations(step_file, annotations=stepDict['annotations'])
 	return(step_file.id)
@@ -125,7 +135,7 @@ def setUpSynapseProject(foldersToCreate,syn,pid=None,pname=None):
 		project = syn.get(pid)
 		print '%s' % project.name
 		# Check to see whether any of the sub-folders already exist.
-		results = syn.chunkedQuery(''.join(['SELECT id, name FROM entity WHERE parentID=="', project.id, '"']))
+		results = syn.chunkedQuery(''.join(['SELECT id, name FROM entity WHERE parentId=="', project.id, '"']))
 		# Add the ones that exist
 		for entity in results:
 			existingFolders[entity['entity.name']] = entity['entity.id']
@@ -138,6 +148,6 @@ def setUpSynapseProject(foldersToCreate,syn,pid=None,pname=None):
 		createFolder = Folder(name, parent=project.id)
 		createFolder = syn.store(createFolder)
 		existingFolders[name] = createFolder.id
-	return(project)
+	return(project, existingFolders)
 
 
