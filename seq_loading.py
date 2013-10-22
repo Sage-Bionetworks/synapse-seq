@@ -90,6 +90,7 @@ def str2bool(inString): # this function found on stackoverflow
 
 def add_workflow_step_to_synapse(inFilePath, stepDict, step='1', software=None, parentid=None, syn=None, stepIDs=None, inFilename=None):
 	'''Uploads files with provenance and annotations to Synapse.'''
+	usedList = None
 	if not inFilename:
 		inFilename = os.path.basename(inFilePath.strip())
 	if not software:
@@ -103,7 +104,8 @@ def add_workflow_step_to_synapse(inFilePath, stepDict, step='1', software=None, 
 	execList = stepDict['executed'].strip().split(';')
 
 	act = Activity(name=stepDict['actName'],  description=stepDict['description'])
-	act.used(usedList)
+	if usedList is not None:
+		act.used(usedList)
 	for item in execList:
 		splitItem = item.split(',')
 		target = splitItem[0]
