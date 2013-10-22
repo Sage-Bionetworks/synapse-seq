@@ -2,9 +2,9 @@
 # Oct. 17, 2013
 # KKD for Sage Bionetworks
 
-import synapseclient, os, argparse, subprocess, os.path, sys
+import synapseclient, os, argparse, subprocess, os.path, sys, boto
 from synapseclient import *
-sys.path.append('/Users/kristen/Computing/synapseSeq/')
+sys.path.append('/home/kristen/bin/synapseseq')
 import seq_loading as sl
 
 parser = argparse.ArgumentParser(description='Runs Synapse fusion reads prediction workflow using omicsoft FusionMap.')
@@ -12,36 +12,53 @@ parser.add_argument('--input', dest='bam', required=True, help='Synapse BAM enti
 parser.add_argument('--params', dest='path', required=True, help='Path to config file for synapse provenance and annotations specific to this project.')
 parser.add_argument('--local', dest='wd', required=False, help='Local directory for output files.', default=os.getcwd())
 parser.add_argument('--config', dest='cfg', required=False, help='Path to default FusionMap config file.', default=os.path.join(os.getcwd(), 'generic.config'))
+parser.add_argument('--bucket', dest='aws', required=False, help='If the data is in an external bucket, provide the name.', default=None)
 args = parser.parse_args()
 
-fusionExe = 'mono ~/Software/FusionMap_2013-07-30/bin/FusionMap.exe'
-fusionDir = '~/Software/FusionMap_2013-07-30/'
+fusionExe = '/opt/mono-2.10.8/bin/mono-sgen /home/kristen/bin/FusionMap_2013-07-30/bin/FusionMap.exe'
+fusionDir = '/home/kristen/bin/FusionMap_2013-07-30'
 
 syn = synapseclient.Synapse()
 syn.login()
 
-
 BAMentity = syn.get(args.bam, downloadFile = False)
-if 'path' in BAMentity:
-	filePath = BAMentity.path
+
+if args.aws:
+	s3 = boto.connect_s3()
+	H3bucket = s3.get_bucket(args.aws) 
+
+	keyName = BAMentity.externalURL.lstrip('file:/')
+	key = H3bucket.get_key(keyName)
+	filePath = os.path.join(args.wd, os.path.basename(keyName))
+	key.get_contents_to_filename(filePath)	
 else:
-	filePath = BAMentity.name
-	
+	if 'path' in BAMentity:
+		filePath = BAMentity.path
+	else:
+		filePath = BAMentity.name
+
+print '%s' % filePath	
 prefix = os.path.basename(filePath).rstrip('.bam')
 
 ### Get unmapped reads
 tmpfile = os.path.join(args.wd, prefix+'_tmp1.bam')
 cmd = ' '.join(['samtools view -u -f 4 -F264', filePath, '>', tmpfile])
 print '%s' % cmd
+subprocess.call(cmd, shell = True)
+
 tmpfile = os.path.join(args.wd, prefix+'_tmp2.bam')
 cmd = ' '.join(['samtools view -u -f 8 -F260', filePath, '>', tmpfile])
 print '%s' % cmd
+subprocess.call(cmd, shell = True)
+
 tmpfile = os.path.join(args.wd, prefix+'_tmp3.bam')
 cmd = ' '.join(['samtools view -u -f 12 -F256', filePath, '>', tmpfile])
 print '%s' % cmd
+subprocess.call(cmd, shell = True)
 
 cmd = ''.join(['samtools merge -u - ', args.wd, '/', prefix+'tmp[123].bam | samtools sort -n - unmapped'])
 print '%s' % cmd
+subprocess.call(cmd, shell = True)
 
 
 ### Run FusionMap on unmapped reads
@@ -59,11 +76,12 @@ generic.close()
 # Run FusionMap
 cmd = ' '.join([fusionExe, '--semap', fusionDir, 'GRCh37 Gencode14', os.path.join(args.wd, '.'.join([prefix, 'config']))])
 print '%s' % cmd
+subprocess.call(cmd, shell = True)
 
 
 ### Load result to synapse
 loadFilePath = os.path.join(args.wd, prefix+'.FusionReport.txt')
-print '%s' % loadFilePath
+#print '%s' % loadFilePath
 
 synDict = sl.readConfig(args.path)
 fullUsed = ','.join([synDict['1']['used'], BAMentity.id])
