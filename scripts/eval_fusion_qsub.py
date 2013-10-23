@@ -15,7 +15,7 @@ parser.add_argument('--config', dest='cfg', required=False, help='Path to defaul
 parser.add_argument('--bucket', dest='aws', required=False, help='If the data is in an external bucket, provide the name.', default=None)
 args = parser.parse_args()
 
-fusionExe = '/opt/mono-2.10.8/bin/mono-sgen /home/kristen/bin/FusionMap_2013-07-30/bin/FusionMap.exe'
+fusionExe = '/opt/mono-2.10.8/bin/mono /home/kristen/bin/FusionMap_2013-07-30/bin/FusionMap.exe'
 fusionDir = '/home/kristen/bin/FusionMap_2013-07-30'
 
 syn = synapseclient.Synapse()
@@ -30,7 +30,8 @@ if args.aws:
 	keyName = BAMentity.externalURL.lstrip('file:/')
 	key = H3bucket.get_key(keyName)
 	filePath = os.path.join(args.wd, os.path.basename(keyName))
-	key.get_contents_to_filename(filePath)	
+	if not os.path.exists(filePath):
+		key.get_contents_to_filename(filePath)	
 else:
 	if 'path' in BAMentity:
 		filePath = BAMentity.path
@@ -56,7 +57,7 @@ cmd = ' '.join(['samtools view -u -f 12 -F256', filePath, '>', tmpfile])
 print '%s' % cmd
 subprocess.call(cmd, shell = True)
 
-cmd = ''.join(['samtools merge -u - ', args.wd, '/', prefix+'tmp[123].bam | samtools sort -n - unmapped'])
+cmd = ''.join(['samtools merge -u -f -h /home/kristen/default_header.sam - ', args.wd, '/', prefix+'_tmp[123].bam | samtools sort -n - ', os.path.join(args.wd, prefix+'_unmapped')])
 print '%s' % cmd
 subprocess.call(cmd, shell = True)
 
@@ -64,12 +65,13 @@ subprocess.call(cmd, shell = True)
 ### Run FusionMap on unmapped reads
 
 # Make fusionmap config file
+infile = filePath.rstrip('.bam')+'_unmapped.bam'
 configFile = open(os.path.join(args.wd, '.'.join([prefix, 'config'])), 'w')
-configFile.write('\n'.join(['<Files>', filePath, '\n']))
+configFile.write('\n'.join(['<Files>', infile, '\n']))
 generic = open(args.cfg, 'r')
 for line in generic:
 	configFile.write(line)
-configFile.write('\n'.join(['', '<Output>', 'OutputPath='+args.wd, 'OutputName='+prefix]))
+configFile.write('\n'.join(['', '<Output>', 'TempPath=/mnt/kristen/tmp', 'OutputPath='+args.wd+'/', 'OutputName='+prefix, '.unmapped\n']))
 configFile.close()
 generic.close()
 
