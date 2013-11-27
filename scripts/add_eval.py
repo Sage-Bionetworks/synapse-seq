@@ -18,5 +18,6 @@ syn.login()
 
 newEval = Evaluation(name = args.name, description = args.desc, contentSource = args.pid)
 newEval = syn.store(newEval)
+syn.joinEvaluation(newEval)
 
 print 'Synapse ID for evaluation %s is %s' % (args.name, newEval.id)
