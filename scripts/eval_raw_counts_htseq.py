@@ -8,7 +8,8 @@
 import synapseclient, os, argparse, subprocess, sys, boto
 from synapseclient import *
 #sys.path.append('/home/kristen/bin/synapseseq')
-sys.path.append('/Users/kristen/Work/Sage/computing/synapseseq') # home
+#sys.path.append('/Users/kristen/Work/Sage/computing/synapseseq') # home
+sys.path.append('/home/ubuntu/bin/synapseseq') # AWS
 import seq_loading as sl
 
 parser = argparse.ArgumentParser(description='Runs Synapse read counting workflow using HTSeq.')
@@ -31,10 +32,11 @@ GTFentity = syn.get(args.gtf, downloadFile = True)
 print 'Using gene models found in %s' % GTFentity.name
 
 if 'bucket' in BAMannotations:
+	print 'Accessing data in bucket %s' % BAMannotations['bucket'][0]
 	s3 = boto.connect_s3()
-	H3bucket = s3.get_bucket(BAMannotations['bucket']) 
+	H3bucket = s3.get_bucket(BAMannotations['bucket'][0]) 
 
-	keyName = BAMannotations['key']
+	keyName = BAMannotations['key'][0]
 	bucketItem = H3bucket.get_key(keyName)
 	filePath = os.path.join(args.wd, os.path.basename(keyName))
 	if not os.path.exists(filePath):
@@ -60,12 +62,13 @@ provDict['used'] = ','.join([BAMentity.id, GTFentity.id])
 provDict['annotations'] = dict(fileType='count',normalized='no',summaryLevel='gene')
 
 
-### Run samsort step -- not necessary if annotation coordinate == sorted
-if ('sorted' not in BAMannotations) or (BAMannotations['sorted'] != 'coordinate'):
-	cmd = ' '.join(['samtools sort -n', filePath, prefix+'_namesort'])
-	print '%s' % cmd
-	subprocess.call(cmd, shell = True)
+### Run samsort step if necessary
+if ('sorted' not in BAMannotations) or (BAMannotations['sorted'][0] != 'queryname'):
 	filePath = ''.join([filePath.rstrip('.bam'), '_namesort.bam']) 
+	if not os.path.exists(filePath):
+		cmd = ' '.join(['samtools sort -n', filePath, prefix+'_namesort'])
+		print '%s' % cmd
+		subprocess.call(cmd, shell = True)
 	
 ### Run htseq step
 outputFile = filePath.rstrip('.bam') + '.htseq'				
@@ -81,7 +84,7 @@ countEntityID = sl.add_workflow_step_to_synapse(loadFilePath, stepDict=provDict,
 
 ### Submit result to synapse count Eval
 countEntity = syn.get(countEntityID, downloadFile = False)
-countEval = syn.getEvaluation('XXXXXXX')
+countEval = syn.getEvaluation('2275607') # 2275607 is testCount eval
 profile = syn.getUserProfile() 
 submission = syn.submit(entity=countEntity, evaluation = countEval.id,  name = countEntity.name, teamName = profile['displayName'])
 print 'Submitted %s to %s' % (countEntity.name, countEval.name)
