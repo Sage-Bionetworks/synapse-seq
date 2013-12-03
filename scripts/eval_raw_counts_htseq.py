@@ -1,21 +1,17 @@
 #! /usr/bin/env python
 # Nov. 26, 2013
 # KKD for Sage Bionetworks
-
 # Requires: htseq installed globally
-# Need: eval id for htseq-count
 
 import synapseclient, os, argparse, subprocess, sys, boto
 from synapseclient import *
-#sys.path.append('/home/kristen/bin/synapseseq')
-#sys.path.append('/Users/kristen/Work/Sage/computing/synapseseq') # home
-sys.path.append('/home/ubuntu/bin/synapseseq') # AWS
+sys.path.append('/home/ubuntu/bin/synapseseq') # AWS cloudbiolinux
 import seq_loading as sl
 
 parser = argparse.ArgumentParser(description='Runs Synapse read counting workflow using HTSeq.')
 parser.add_argument('--input', dest='bam', required=True, help='Synapse BAM entity ID to process.')
 parser.add_argument('--output', dest='sid', required=True, help='Synapse ID of project or folder to contain the output data.')
-parser.add_argument('--GTF', dest='gtf', required=False, help='Synapse ID of GTF file to use for gene models.', default='syn2280529')
+parser.add_argument('--GTF', dest='gtf', required=False, help='Synapse ID of GTF file to use for gene models.', default='syn1998756') # syn1998756 is ENSGv70
 parser.add_argument('--local', dest='wd', required=False, help='Local directory for output files.', default=os.getcwd())
 parser.add_argument('--count-mode', dest='count', required=False, help='Counting mode for HTSeq.', default='intersection-nonempty')
 parser.add_argument('--stranded', dest='strand', required=False, help='Stranded counting in HTSeq?', default='no')
@@ -32,7 +28,6 @@ GTFentity = syn.get(args.gtf, downloadFile = True)
 print 'Using gene models found in %s' % GTFentity.name
 
 if 'bucket' in BAMannotations:
-	print 'Accessing data in bucket %s' % BAMannotations['bucket'][0]
 	s3 = boto.connect_s3()
 	H3bucket = s3.get_bucket(BAMannotations['bucket'][0]) 
 
@@ -40,11 +35,13 @@ if 'bucket' in BAMannotations:
 	bucketItem = H3bucket.get_key(keyName)
 	filePath = os.path.join(args.wd, os.path.basename(keyName))
 	if not os.path.exists(filePath):
+		print 'Getting data in bucket %s' % BAMannotations['bucket'][0]
 		bucketItem.get_contents_to_filename(filePath)	
 else:
-	print 'Will download %s from synapse.' % BAMentity.name
-#	BAMentity = syn.get(args.bam, downloadFile = True, downloadLocation = args.wd)
 	filePath = os.path.join(args.wd, BAMentity.name)
+	if not os.path.exists(filePath):
+		print 'Will download %s from synapse.' % BAMentity.name
+		BAMentity = syn.get(args.bam, downloadFile = True, downloadLocation = args.wd)
 
 print '%s' % filePath	
 prefix = os.path.basename(filePath).rstrip('.bam')
@@ -72,19 +69,20 @@ if ('sorted' not in BAMannotations) or (BAMannotations['sorted'][0] != 'querynam
 	
 ### Run htseq step
 outputFile = filePath.rstrip('.bam') + '.htseq'				
-cmd = ' '.join(['samtools view ', filePath, '| python -m HTSeq.scripts.count -m', args.count, '-s', args.strand, '-', GTFentity.path, '>', outputFile])
-print '%s' % cmd
-subprocess.call(cmd, shell = True)
+if not os.path.exists(outputFile):
+	cmd = ' '.join(['samtools view ', filePath, '| python -m HTSeq.scripts.count -m', args.count, '-s', args.strand, '-', GTFentity.path, '>', outputFile])
+	print '%s' % cmd
+	subprocess.call(cmd, shell = True)
 
 
 ### Load result to synapse
 print '%s' % outputFile
-countEntityID = sl.add_workflow_step_to_synapse(loadFilePath, stepDict=provDict, parentid=args.sid, syn=syn)
+countEntityID = sl.add_workflow_step_to_synapse(os.path.join(args.wd, outputFile), stepDict=provDict, parentid=args.sid, syn=syn)
 
 
 ### Submit result to synapse count Eval
 countEntity = syn.get(countEntityID, downloadFile = False)
-countEval = syn.getEvaluation('2275607') # 2275607 is testCount eval
+countEval = syn.getEvaluation('2313942') # 2313942 is counts_HTseq
 profile = syn.getUserProfile() 
 submission = syn.submit(entity=countEntity, evaluation = countEval.id,  name = countEntity.name, teamName = profile['displayName'])
 print 'Submitted %s to %s' % (countEntity.name, countEval.name)
