@@ -11,7 +11,7 @@ import seq_loading as sl
 parser = argparse.ArgumentParser(description='Runs Synapse read counting workflow using HTSeq.')
 parser.add_argument('--input', dest='bam', required=True, help='Synapse BAM entity ID to process.')
 parser.add_argument('--output', dest='sid', required=True, help='Synapse ID of project or folder to contain the output data.')
-parser.add_argument('--GTF', dest='gtf', required=False, help='Synapse ID of GTF file to use for gene models.', default='syn1998756') # syn1998756 is ENSGv70
+parser.add_argument('--GTF', dest='gtf', required=False, help='Synapse ID of GTF file to use for gene models.', default='syn2315951') # syn2315951 is ENSGv72
 parser.add_argument('--local', dest='wd', required=False, help='Local directory for output files.', default=os.getcwd())
 parser.add_argument('--count-mode', dest='count', required=False, help='Counting mode for HTSeq.', default='intersection-nonempty')
 parser.add_argument('--stranded', dest='strand', required=False, help='Stranded counting in HTSeq?', default='no')
@@ -24,8 +24,20 @@ syn.login()
 BAMentity = syn.get(args.bam, downloadFile = False)
 BAMannotations = syn.getAnnotations(BAMentity)
 
-GTFentity = syn.get(args.gtf, downloadFile = True)
+GTFentity = syn.get(args.gtf, downloadFile = False)
 print 'Using gene models found in %s' % GTFentity.name
+
+if ('externalURL' in GTFentity) and (GTFentity.externalURL.startswith('ftp')):
+	cmd = ' '.join(['wget', GTFentity.externalURL])
+	print '%s' % cmd
+	subprocess.call(cmd, shell = True)
+	GTFpath = os.path.join(args.wd, os.path.basename(GTFentity.externalURL))
+	if GTFentity.externalURL.endswith('gz'):
+		subprocess.call(' '.join(['gunzip', os.path.basename(GTFentity.externalURL)]), shell = True)
+		GTFpath = os.path.join(args.wd, os.path.basename(GTFentity.externalURL).rstrip('.gz'))
+else:
+	GTFentity = syn.get(args.gtf, downloadFile = True, downloadLocation = args.wd)
+	GTFpath = os.path.join(args.wd, GTFentity.name)	
 
 if 'bucket' in BAMannotations:
 	s3 = boto.connect_s3()
@@ -70,7 +82,7 @@ if ('sorted' not in BAMannotations) or (BAMannotations['sorted'][0] != 'querynam
 ### Run htseq step
 outputFile = filePath.rstrip('.bam') + '.htseq'				
 if not os.path.exists(outputFile):
-	cmd = ' '.join(['samtools view ', filePath, '| python -m HTSeq.scripts.count -m', args.count, '-s', args.strand, '-', GTFentity.path, '>', outputFile])
+	cmd = ' '.join(['samtools view ', filePath, '| python -m HTSeq.scripts.count -m', args.count, '-s', args.strand, '-', GTFpath, '>', outputFile])
 	print '%s' % cmd
 	subprocess.call(cmd, shell = True)
 
