@@ -5,7 +5,6 @@ Functions for loading existing sequencing datasets into Synapse.
 
 # To do items: 
 #	change config to yaml
-#	add dependencies in provenance commands
 #	generalize tophat name/version id for other methods
 #	unit tests
 
@@ -89,8 +88,9 @@ def str2bool(inString): # this function found on stackoverflow
 	return inString.lower() in ("yes", "true", "t", "1")
 
 
-def add_workflow_step_to_synapse(inFilePath, stepDict, step='1', store=False, software=None, parentid=None, syn=None, stepIDs=None, inFilename=None ):
+def add_workflow_step_to_synapse(inFilePath, stepDict, step='1', software=None, parentid=None, syn=None, stepIDs=None, inFilename=None):
 	'''Uploads files with provenance and annotations to Synapse.'''
+	usedList = None
 	if not inFilename:
 		inFilename = os.path.basename(inFilePath.strip())
 	if not software:
@@ -104,7 +104,8 @@ def add_workflow_step_to_synapse(inFilePath, stepDict, step='1', store=False, so
 	execList = stepDict['executed'].strip().split(';')
 
 	act = Activity(name=stepDict['actName'],  description=stepDict['description'])
-	act.used(usedList)
+	if usedList is not None:
+		act.used(usedList)
 	for item in execList:
 		splitItem = item.split(',')
 		target = splitItem[0]
@@ -113,10 +114,26 @@ def add_workflow_step_to_synapse(inFilePath, stepDict, step='1', store=False, so
 			version = splitItem[1]
 		act.executed(target=target, targetVersion=version)
 
-	step_file = File(inFilePath, name=inFilename, description=stepDict['fileDescription'], parentId=parentid, synapseStore=str2bool(stepDict['store']))	
-	step_file = syn.store(step_file, activity=act)
-	syn.setAnnotations(step_file, annotations=stepDict['annotations'])
+	step_file = File(path=inFilePath, name=inFilename, description=stepDict['fileDescription'], parentId=parentid, synapseStore=str2bool(stepDict['store']))	
+	step_file = syn.store(step_file, activity=act, forceVersion=False)
+	if 'annotations' in stepDict:
+		syn.setAnnotations(step_file, annotations=stepDict['annotations'])
+	print 'new entity id %s' % step_file.id
 	return(step_file.id)
+
+
+
+
+def getExistingFolders(syn,pid):
+	'''Returns dictionary of existing folders for the project. key = name, val = id.'''
+	
+	existingFolders = dict()
+	project = syn.get(pid)
+	results = syn.chunkedQuery(''.join(['SELECT id, name, concreteType FROM entity WHERE parentId=="', project.id, '"']))
+	for result in results:
+		if result['entity.concreteType'][0] == 'org.sagebionetworks.repo.model.Folder':
+			existingFolders[result['entity.name']] = result['entity.id']
+	return(existingFolders)
 
 
 def setUpSynapseProject(foldersToCreate,syn,pid=None,pname=None):
@@ -124,22 +141,16 @@ def setUpSynapseProject(foldersToCreate,syn,pid=None,pname=None):
 	
 	# Create a set of sub-folders expected for this project
 	folderSchemaSet = set(foldersToCreate)
-	existingFolders = dict()
 
 	# Get the project if it exists or create
 	if pid == None:
 		project = Project(pname)
 		project = syn.store(project)
-
 	else:
 		project = syn.get(pid)
 		print '%s' % project.name
-		# Check to see whether any of the sub-folders already exist.
-		results = syn.chunkedQuery(''.join(['SELECT id, name FROM entity WHERE parentId=="', project.id, '"']))
-		# Add the ones that exist
-		for entity in results:
-			existingFolders[entity['entity.name']] = entity['entity.id']
-		# Make a list of ones to create
+		
+		existingFolders = getExistingFolders(syn,project.id)
 		if len(existingFolders) > 0:
 			foldersToCreate = folderSchemaSet.difference(existingFolders.keys())
 
@@ -149,5 +160,4 @@ def setUpSynapseProject(foldersToCreate,syn,pid=None,pname=None):
 		createFolder = syn.store(createFolder)
 		existingFolders[name] = createFolder.id
 	return(project, existingFolders)
-
 
