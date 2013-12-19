@@ -1,6 +1,7 @@
 synapse-seq
 ===========
 
+<<<<<<< HEAD
 This package contains functionality to load existing seq datasets into [Synapse](https://www.synapse.org/) and to run seq workflows using [Synapse.](https://www.synapse.org/)
 
 
@@ -40,3 +41,6 @@ License and Copyright
 &copy; Copyright 2013 Sage Bionetworks
 
 This software is licensed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+=======
+Code for running/loading seq datasets using Synapse.
+>>>>>>> d957ab6185b2c009f5fe0957a128a1158ae5cfc6
