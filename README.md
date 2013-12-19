@@ -1,4 +1,4 @@
-synpase-seq
+synapse-seq
 ===========
 
 This package contains functionality to load existing seq datasets into [Synapse](https://www.synapse.org/) and to run seq workflows using [Synapse.](https://www.synapse.org/)
