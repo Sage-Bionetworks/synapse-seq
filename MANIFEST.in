@@ -1,0 +1,4 @@
+include *.txt
+include README.md
+include *.yaml
+recursive-include docs *.txt
