@@ -112,7 +112,10 @@ def add_workflow_step_to_synapse(inFilePath, stepDict, step='1', software=None, 
 		version = 1
 		if (len(splitItem) > 1):
 			version = splitItem[1]
-		act.executed(target=target, targetVersion=version)
+		if target.startswith('http'):
+			act.executed(url=target, name=os.path.basename(target))
+		else:
+			act.executed(target=target, targetVersion=version)
 
 	step_file = File(path=inFilePath, name=inFilename, description=stepDict['fileDescription'], parentId=parentid, synapseStore=str2bool(stepDict['store']))	
 	step_file = syn.store(step_file, activity=act, forceVersion=False)
@@ -161,3 +164,5 @@ def setUpSynapseProject(foldersToCreate,syn,pid=None,pname=None):
 		existingFolders[name] = createFolder.id
 	return(project, existingFolders)
 
+if __name__ == "__main__":
+	#put test code here?
