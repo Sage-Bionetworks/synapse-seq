@@ -32,8 +32,8 @@ for eval,code in yaml.load(stream).iteritems():
 
 	# Run count job for open submissions
 	for submission in syn.getSubmissions(eval):	
-		print '%s' % submission.entityID
-		submissionAnnotations = getAnnotations(submission.entityId, version=submission.versionNumber)
-		sr.runJobsForSubmissions(submission, codePath, logsDir, outputProjectID=submissionAnnotations['outputID'], submissionAnnotations['commandLineParams'], submissionAnnotations['bucket'], syn)
+#		print '%s' % submission.entityId
+		submissionAnnotations = syn.getAnnotations(submission.entityId, version=submission.versionNumber)
+		sr.runJobsForSubmissions(submission, codePath, logsDir, outputProjectID=submissionAnnotations['outputID'], commandLineParams=submissionAnnotations['commandLineParams'], externalBucket=submissionAnnotations['bucket'], syn=syn)
 
 
