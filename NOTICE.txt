@@ -1,0 +1,7 @@
+   synapseseq 
+   Copyright 2013 Sage Bionetworks, Seattle, WA
+
+   This product includes software developed at
+   Sage Bionetworks (http://http://sagebase.org/).
+
+
