@@ -164,5 +164,5 @@ def setUpSynapseProject(foldersToCreate,syn,pid=None,pname=None):
 		existingFolders[name] = createFolder.id
 	return(project, existingFolders)
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
 	#put test code here?

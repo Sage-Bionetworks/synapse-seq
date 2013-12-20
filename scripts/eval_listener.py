@@ -3,10 +3,7 @@
 # KKD for Sage Bionetworks
 
 
-import synapseclient, os, sys, yaml, argparse
-from synapseclient import *
-#sys.path.append('/home/ubuntu/bin/synapseseq') # AWS cloudbiolinux
-sys.path.append('/Users/kristen/Computing/synapseSeq') 
+import synapseclient, os, yaml, argparse
 import seq_running as sr
 
 parser = argparse.ArgumentParser(description='Checks for any new submissions to seq workflow evaluations and runs the corrsponding compute jobs.')

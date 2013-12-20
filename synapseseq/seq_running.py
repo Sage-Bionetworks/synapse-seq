@@ -57,5 +57,5 @@ def runJobsForSubmissions(submission, evalCodePath, logsDir, outputProjectID, co
 #		status.status = 'SCORED' # Scored is functioning as "pending" for now.
 #		status = syn.store(status)
 
-if __name__ == "__main__":
+#if __name__ == "__main__":
 	#put test code here?				

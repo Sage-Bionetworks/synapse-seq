@@ -1,4 +1,4 @@
 include *.txt
 include README.md
-include *.yaml
+include synapseseq/*.yaml
 recursive-include docs *.txt
