@@ -35,7 +35,7 @@ def getBAMs(projectOrFolderID, syn):
 	
 
 
-def runJobsForSubmissions(submission, evalCodePath, logsDir, outputProjectID, commandLineParams, syn, externalBucket=None):
+def runJobsForSubmissions(submission, evalCode, logsDir, outputProjectID, commandLineParams, syn, externalBucket=None):
 	'''	Checks for new submissions and runs corresponding evaluation jobs. Requires qsub.'''
 	# Hardcoded: path to python in qsub statement.
 
@@ -47,9 +47,9 @@ def runJobsForSubmissions(submission, evalCodePath, logsDir, outputProjectID, co
 		if externalBucket[0] is not None:
 			print 'external bucket %s' % externalBucket[0]
 ### Change this to give submission object to qsub after get the ability to getSubmissions, downloadFile = False
-			cmd = ' '.join(['qsub -N count -o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', evalCodePath, '--input', submission.entityId, '--output', outputProjectID[0], '--bucket', externalBucket[0]])
+			cmd = ' '.join(['qsub -N count -o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', evalCode, '--input', submission.entityId, '--output', outputProjectID[0], '--bucket', externalBucket[0]])
 		else:
-			cmd = ' '.join(['qsub -N count -o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', evalCodePath, '--input', submission.entityId, '--output', outputProjectID])
+			cmd = ' '.join(['qsub -N count -o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', evalCode, '--input', submission.entityId, '--output', outputProjectID])
 
 		print '%s' % cmd
 #			subprocess.call(cmd, shell = True)
