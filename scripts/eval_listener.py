@@ -42,11 +42,8 @@ for eval,code in yaml.load(stream).iteritems():
 		os.mkdir(logsDir)
 
 	# Run jobs for open submissions
-	for submission in syn.getSubmissions(eval):	
+	for submission in syn.getSubmissions(eval, status='RECEIVED'):	
 #		print '%s' % submission.entityId
-		status = syn.getSubmissionStatus(submission)
-		if status.status == 'RECEIVED':
-
 			additionalParams = ''
 			entityAnnotations = syn.getAnnotations(submission.entityId)
 			if 'bucket' in entityAnnotations:

@@ -60,10 +60,12 @@ else:
 	if not os.path.exists(localBAMfilePath):
 		print 'Will download %s from synapse.' % submission.name
 		BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = True, downloadLocation = wd)
-		if calc_md5(localBAMfilePath).upper() != BAMentity.md5.upper():
-			print 'Download error for file %s' % submission.name
-			os.remove(localBAMfilePath)
-			sys.exit()
+	else:
+		BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = False, downloadLocation = wd)
+	if calc_md5(localBAMfilePath).upper() != BAMentity.md5.upper():
+		print 'Download error for file %s' % submission.name
+		os.remove(localBAMfilePath)
+		sys.exit()
 
 
 print '%s' % localBAMfilePath	
