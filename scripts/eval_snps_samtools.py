@@ -21,7 +21,7 @@ args = parser.parse_args()
 # Hardcoded to cloudbiolinux - need to generalize eventually
 bcftools = '/usr/bin/bcftools' # assume location of cloudbiolinux
 varFilter = '/usr/share/samtools/vcfutils.pl varFilter' # assume location of cloudbiolinux
-reference = '/mnt/transient_nfs/genome.fa' # assume location of cloudbiolinux master node
+localReferencePath = '/mnt/galaxyData' # Node-specific location on cloudbiolinux.
 if not os.path.exists('home/ubuntu/.synapseConfig'):
 	shutil.copy('/mnt/transient_nfs/.synapseConfig', '/home/ubuntu/')
 wd = '/mnt/galaxyData/samtools_results'
@@ -46,6 +46,7 @@ syn = synapseclient.Synapse()
 syn.login()
 submission = syn.getSubmission(args.bam, downloadFile = False)
 
+## Getting BAM
 if args.bucket is not None:
 	import boto
 	s3 = boto.connect_s3()
@@ -67,9 +68,27 @@ else:
 		os.remove(localBAMfilePath)
 		sys.exit()
 
-
 print '%s' % localBAMfilePath	
 prefix = os.path.basename(localBAMfilePath).rstrip('.bam')
+
+
+
+## Locate reference on node, copying file from head node if necessary.
+# Set the expected path for the file.
+if args.ref.startswith('syn'):
+	refEntity = syn.get(entity=args.ref, downloadFile = False)
+	refName = refEntity.filename)
+else: # for external links
+	refName = os.path.basename(args.ref)
+reference = os.path.join(localReferencePath, refName)
+
+# If the file is not there, copy it from head node, if applicable.
+if not os.path.exists(reference):
+	if os.path.exists(os.path.join('/mnt/transient_nfs', refName)):
+		shutil.copy(os.path.join('/mnt/transient_nfs', refName), localReferencePath)
+	else: sys.exit("ERROR: Can't locate reference.")
+
+
 
 ## Run variant calling step
 outRawBCF = os.path.join(wd, prefix+'.var.raw.bcf')

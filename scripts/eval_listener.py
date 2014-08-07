@@ -2,8 +2,9 @@
 # Dec. 9, 2013
 # KKD for Sage Bionetworks
 
-# Hardcoded: path to python in qsub statement.
-# To do: get reference
+# TODO Hardcoded: path to python in qsub statement.
+# TODO Generalize qsub commands so not dependent on SGE, but e.g. PBS could also be used.
+## User should manually move reference onto machine and verify integrity. The reference file should be in a location that is currently hardcoded but can be altered with a config file. The reference file should have the same name as the filename of the synapse entity or the basename of the external URL.
 
 import synapseclient, os, yaml, argparse, subprocess
 
