@@ -3,8 +3,7 @@ Functions for running sequencing workflows using Synapse.
 
 """
 
-# To do items: 
-#	unit tests
+# TODO unit tests
 
 import synapseclient, os, argparse, sys, os.path, subprocess
 import seq_loading as sl
@@ -37,9 +36,8 @@ def getBAMs(projectOrFolderID, syn):
 
 def runJobsForSubmissions(submission, evalCode, logsDir, outputProjectID, commandLineParams, syn, externalBucket=None):
 	'''	Checks for new submissions and runs corresponding evaluation jobs. Requires qsub.'''
+
 	# Hardcoded: path to python in qsub statement.
-
-
 	profile = syn.getUserProfile() 
 	status = syn.getSubmissionStatus(submission)
 	if status.status == 'OPEN':
@@ -56,6 +54,64 @@ def runJobsForSubmissions(submission, evalCode, logsDir, outputProjectID, comman
 
 #		status.status = 'SCORED' # Scored is functioning as "pending" for now.
 #		status = syn.store(status)
+
+
+
+# This function code from Chris Bare
+def calc_md5(inFile): 
+	'''Calculate md5.'''
+	
+	md5 = hashlib.md5()
+	with open(inFile, 'rb') as bamfile:
+		while True:
+			data = bamfile.read(2**20) 
+			if not data:
+				break
+			md5.update(data)
+	bamfile.closed
+	print '%s' % md5.hexdigest().upper()
+	return(md5.hexdigest())
+
+
+def locateRefOnHeadNode(ref,headNFSPath):
+	'''Locate reference on head node NFS.'''
+
+	if ref.startswith('syn'):
+		refEntity = syn.get(entity=ref, downloadFile = False)
+		refName = refEntity.name
+	else: # for external links
+		refName = os.path.basename(ref)
+	reference = os.path.join(headNFSPath, refName)
+	if not os.path.exists(reference):
+		sys.exit("ERROR: Can't locate reference.")
+
+
+
+def getBAMtoComputeNode(wd,submission=None,bucket=None,extKey=None):
+	'''Locate BAM on node, copying from synapse or S3 if necessary.'''
+
+	if bucket is not None:
+		import boto
+		s3 = boto.connect_s3()
+		external_bucket = s3.get_bucket(bucket) 
+		bucketItem = external_bucket.get_key(extKey)
+		localBAMfilePath = os.path.join(wd, os.path.basename(extKey))
+		if not os.path.exists(localBAMfilePath):
+			print 'Getting data in bucket %s' % bucket
+			bucketItem.get_contents_to_filename(localBAMfilePath)	
+	else:
+		localBAMfilePath = os.path.join(wd, submission.name)
+		print '%s' % localBAMfilePath		
+		if not os.path.exists(localBAMfilePath):
+			print 'Will download %s from synapse.' % submission.name
+			BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = True, downloadLocation = wd)
+			if calc_md5(localBAMfilePath).upper() != BAMentity.md5.upper():
+				os.remove(localBAMfilePath)
+				sys.exit(' '.join(['ERROR: MD5 of %s does not match md5 in synapse.', submission.name]))
+		else:
+			BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = False, downloadLocation = wd)
+
+
 
 #if __name__ == "__main__":
 	#put test code here?				
