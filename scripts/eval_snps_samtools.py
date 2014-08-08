@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 # Kristen K. Dang for Sage Bionetworks
 # Mar. 21, 2014
+# Approximate compute needs: 300 MB RAM, 1 CPU
 
 
 import synapseclient, os, argparse, subprocess, math, shutil, sys, hashlib
@@ -18,16 +19,16 @@ parser.add_argument('--keyname', dest='key', required=False, help='Key name if n
 args = parser.parse_args()
 
 
-# Hardcoded to cloudbiolinux - need to generalize eventually
+## TODO Hardcoded to cloudbiolinux - need to generalize eventually
 bcftools = '/usr/bin/bcftools' # assume location of cloudbiolinux
 varFilter = '/usr/share/samtools/vcfutils.pl varFilter' # assume location of cloudbiolinux
-localReferencePath = '/mnt/galaxyData' # Node-specific location on cloudbiolinux.
+headNFSPath = '/mnt/transient_nfs/'
+localWDPath = '/mnt/galaxyData' # Execution node wd on cloudbiolinux
+subprocess.call(' '.join(['sudo chown ubuntu:ubuntu', localWDPath]), shell = True)
 if not os.path.exists('home/ubuntu/.synapseConfig'):
-	shutil.copy('/mnt/transient_nfs/.synapseConfig', '/home/ubuntu/')
-wd = '/mnt/galaxyData/samtools_results'
-if not os.path.exists(wd):
-	subprocess.call('sudo chown ubuntu:ubuntu /mnt/galaxyData', shell = True)
-	os.mkdir(wd)
+	shutil.copy(os.path.join(headNFSPath, '.synapseConfig'), '/home/ubuntu/')
+
+
 
 def calc_md5(inFile): # This function code from Chris Bare
 	md5 = hashlib.md5()
@@ -40,11 +41,16 @@ def calc_md5(inFile): # This function code from Chris Bare
 	bamfile.closed
 	print '%s' % md5.hexdigest().upper()
 	return(md5.hexdigest())
+
 	
-	
+evalName = 'SNPsamtools'
+wd = os.path.join(localWDPath, evalName)
+if not os.path.exists(wd):
+	os.mkdir(wd)
 syn = synapseclient.Synapse()
 syn.login()
 submission = syn.getSubmission(args.bam, downloadFile = False)
+
 
 ## Getting BAM
 if args.bucket is not None:
@@ -58,35 +64,33 @@ if args.bucket is not None:
 		bucketItem.get_contents_to_filename(localBAMfilePath)	
 else:
 	localBAMfilePath = os.path.join(wd, submission.name)
+	print '%s' % localBAMfilePath		
 	if not os.path.exists(localBAMfilePath):
 		print 'Will download %s from synapse.' % submission.name
 		BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = True, downloadLocation = wd)
+		if calc_md5(localBAMfilePath).upper() != BAMentity.md5.upper():
+			os.remove(localBAMfilePath)
+			sys.exit(' '.join(['Download error for file', submission.name]))
 	else:
 		BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = False, downloadLocation = wd)
-	if calc_md5(localBAMfilePath).upper() != BAMentity.md5.upper():
-		print 'Download error for file %s' % submission.name
-		os.remove(localBAMfilePath)
-		sys.exit()
 
-print '%s' % localBAMfilePath	
+
+print >> commandsFile, '%s' % localBAMfilePath		
 prefix = os.path.basename(localBAMfilePath).rstrip('.bam')
+cfPath = os.path.join(wd, '_'.join([prefix, evalName, 'commands.txt']))
+commandsFile = open(os.path.join(wd, cfPath),'w')
 
 
 
-## Locate reference on node, copying file from head node if necessary.
-# Set the expected path for the file.
+## Locate reference on head node.
 if args.ref.startswith('syn'):
 	refEntity = syn.get(entity=args.ref, downloadFile = False)
-	refName = refEntity.filename)
+	refName = refEntity.name
 else: # for external links
 	refName = os.path.basename(args.ref)
-reference = os.path.join(localReferencePath, refName)
-
-# If the file is not there, copy it from head node, if applicable.
+reference = os.path.join(headNFSPath, refName)
 if not os.path.exists(reference):
-	if os.path.exists(os.path.join('/mnt/transient_nfs', refName)):
-		shutil.copy(os.path.join('/mnt/transient_nfs', refName), localReferencePath)
-	else: sys.exit("ERROR: Can't locate reference.")
+	sys.exit("ERROR: Can't locate reference.")
 
 
 
@@ -97,7 +101,8 @@ if args.limit is not None:
 else:
 	cmd = ' '.join(['samtools mpileup -uf', reference, localBAMfilePath, '|  bcftools view -bvcg - >', outRawBCF])
 
-print '%s' % cmd
+#print '%s' % cmd
+print >> commandsFile, '%s' % cmd		
 subprocess.call(cmd, shell = True)
 
 
@@ -108,16 +113,21 @@ depth = subprocess.check_output(cmd, shell = True).split()[0]
 
 outFltVCF = os.path.join(wd, prefix+'.var.flt.vcf')
 cmd = ' '.join(['bcftools view', outRawBCF,  '|', varFilter, '-D'+str(math.ceil(args.depth*float(depth))), '>', outFltVCF])
-print '%s' % cmd
+#print '%s' % cmd
+print >> commandsFile, '%s' % cmd		
 subprocess.call(cmd, shell = True)
 
 
 ## Load filtered results to synapse
 print 'Loading %s to Synapse.' % outFltVCF
 
+commandsFile.close()
+cf = File(path=cfPath, description='Job commands.', parentId=args.out, synapseStore=True)
+cf = syn.store(cf)
+
 vcf = File(path=outFltVCF, name=os.path.basename(outFltVCF), description='Filtered variant calls.', parentId=args.out, synapseStore=True)	
 
-vcf = syn.store(vcf, activityName='variant calling', activityDescription='Default variant calling on RNAseq data.', forceVersion=False, used=[BAMentity.id, args.ref, args.params], executed = ['syn2243148', 'https://github.com/Sage-Bionetworks/synapse-seq/blob/master/scripts/eval_snps_samtools.py'])
+vcf = syn.store(vcf, activityName='variant calling', activityDescription='Default variant calling on RNAseq data.', forceVersion=False, used=[BAMentity.id, args.ref, args.params], executed = ['syn2243148', 'https://github.com/Sage-Bionetworks/synapse-seq/blob/master/scripts/eval_snps_samtools.py', cf])
 
 syn.setAnnotations(vcf, annotations=dict(fileType='VCF',VariantOnly='True',LimitedBy=args.limit))
 print 'new entity id %s' % vcf.id
