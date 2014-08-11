@@ -75,10 +75,10 @@ else:
 		BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = False, downloadLocation = wd)
 
 
-print >> commandsFile, '%s' % localBAMfilePath		
 prefix = os.path.basename(localBAMfilePath).rstrip('.bam')
 cfPath = os.path.join(wd, '_'.join([prefix, evalName, 'commands.txt']))
 commandsFile = open(os.path.join(wd, cfPath),'w')
+print >> commandsFile, '%s' % localBAMfilePath		
 
 
 
@@ -101,7 +101,6 @@ if args.limit is not None:
 else:
 	cmd = ' '.join(['samtools mpileup -uf', reference, localBAMfilePath, '|  bcftools view -bvcg - >', outRawBCF])
 
-#print '%s' % cmd
 print >> commandsFile, '%s' % cmd		
 subprocess.call(cmd, shell = True)
 
@@ -113,21 +112,20 @@ depth = subprocess.check_output(cmd, shell = True).split()[0]
 
 outFltVCF = os.path.join(wd, prefix+'.var.flt.vcf')
 cmd = ' '.join(['bcftools view', outRawBCF,  '|', varFilter, '-D'+str(math.ceil(args.depth*float(depth))), '>', outFltVCF])
-#print '%s' % cmd
+
 print >> commandsFile, '%s' % cmd		
 subprocess.call(cmd, shell = True)
 
 
 ## Load filtered results to synapse
-print 'Loading %s to Synapse.' % outFltVCF
-
+print 'Loading %s to Synapse.' % cfPath
 commandsFile.close()
 cf = File(path=cfPath, description='Job commands.', parentId=args.out, synapseStore=True)
-cf = syn.store(cf)
+cf = syn.store(cf, activityName='SNP_evaluation', executed=['https://github.com/Sage-Bionetworks/synapse-seq/blob/master/scripts/eval_snps_samtools.py'])
 
+print 'Loading %s to Synapse.' % outFltVCF
 vcf = File(path=outFltVCF, name=os.path.basename(outFltVCF), description='Filtered variant calls.', parentId=args.out, synapseStore=True)	
-
-vcf = syn.store(vcf, activityName='variant calling', activityDescription='Default variant calling on RNAseq data.', forceVersion=False, used=[BAMentity.id, args.ref, args.params], executed = ['syn2243148', 'https://github.com/Sage-Bionetworks/synapse-seq/blob/master/scripts/eval_snps_samtools.py', cf])
+vcf = syn.store(vcf, activityName='variant calling', activityDescription='Default variant calling on RNAseq data.', forceVersion=False, used=[BAMentity.id, args.ref], executed=['syn2243148', cf.id])
 
 syn.setAnnotations(vcf, annotations=dict(fileType='VCF',VariantOnly='True',LimitedBy=args.limit))
 print 'new entity id %s' % vcf.id
