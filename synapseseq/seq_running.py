@@ -5,7 +5,7 @@ Functions for running sequencing workflows using Synapse.
 
 # TODO unit tests
 
-import synapseclient, os, argparse, sys, os.path, subprocess
+import synapseclient, os, argparse, sys, subprocess, hashlib, shutil
 import seq_loading as sl
 
 
@@ -84,7 +84,17 @@ def locateRefOnHeadNode(ref,headNFSPath):
 	reference = os.path.join(headNFSPath, refName)
 	if not os.path.exists(reference):
 		sys.exit("ERROR: Can't locate reference.")
+	return(reference)
 
+
+def copyRefToWorkerNode(ref,headNFSPath,localPath):
+	'''Copy reference from head node NFS to worker.'''
+	
+	refOnHead = locateRefOnHeadNode(ref=ref,headNFSPath=headNFSPath)
+	localRefPath = os.path.join(localPath,os.path.basename(refOnHead))
+	if not os.path.exists(localRefPath):
+		shutil.copy(refOnHead, localPath)
+	return(localRefPath)
 
 
 def getBAMtoComputeNode(wd,submission=None,bucket=None,extKey=None):
@@ -101,7 +111,6 @@ def getBAMtoComputeNode(wd,submission=None,bucket=None,extKey=None):
 			bucketItem.get_contents_to_filename(localBAMfilePath)	
 	else:
 		localBAMfilePath = os.path.join(wd, submission.name)
-		print '%s' % localBAMfilePath		
 		if not os.path.exists(localBAMfilePath):
 			print 'Will download %s from synapse.' % submission.name
 			BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = True, downloadLocation = wd)
@@ -110,7 +119,15 @@ def getBAMtoComputeNode(wd,submission=None,bucket=None,extKey=None):
 				sys.exit(' '.join(['ERROR: MD5 of %s does not match md5 in synapse.', submission.name]))
 		else:
 			BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = False, downloadLocation = wd)
+	return(localBAMfilePath)
 
+
+
+def getSynConfigFromHead(localPath,headPath):
+	'''Copy Synapse config file from head to worker node, if necessary.'''
+
+	if not os.path.exists(os.path.join(localPath, '.synapseConfig')):
+		shutil.copy(os.path.join(headPath, '.synapseConfig'), localPath)
 
 
 #if __name__ == "__main__":
