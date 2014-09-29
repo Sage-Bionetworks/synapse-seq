@@ -7,12 +7,12 @@
 import os, argparse, subprocess, sys, time
 import synapseclient, synapseseq
 from synapseclient import Activity, File
-import seq_running as sr
+from synapseseq import seq_running as sr
 
 parser = argparse.ArgumentParser(description='Quantifies transcripts in input BAM using sailfish.')
 parser.add_argument('--submission', required=True, dest='bam', help='Submission id of BAM file to process.')
 parser.add_argument('--params', required=True, help='Synapse ID of the parameter file for this job.')
-parser.add_argument('--index', dest='idx', required=True, help='Synapse ID or public URL of transcript index required by sailfish.', default=None)
+parser.add_argument('--index', dest='idx', required=True, help='Synapse ID of transcript index required by sailfish.', default=None)
 parser.add_argument('--output', dest='out', required=True, help='Synapse ID of project or folder to contain the output data.')
 parser.add_argument('--bucket', dest='bucket', required=False, help='Bucket name if not stored in Synapse.', default=None)
 parser.add_argument('--keyname', dest='key', required=False, help='Key name if not stored in Synapse.', default=None)
@@ -36,6 +36,10 @@ syn = synapseclient.Synapse()
 syn.login()
 
 
+## Get index
+index = copyRefToWorkerNode(args.idx,headNFSPath,wd)
+
+
 ## Get submission
 submission = syn.getSubmission(args.bam, downloadFile = False)
 localBAMfilePath = sr.getBAMtoComputeNode(wd=wd,submission=submission,bucket=args.bucket,extKey=args.key)
@@ -43,9 +47,6 @@ prefix = os.path.basename(localBAMfilePath).rstrip('.bam')
 cfPath = os.path.join(wd, '_'.join([prefix, evalName, 'commands.txt']))
 commandsFile = open(os.path.join(wd, cfPath),'w')
 print >> commandsFile, '%s' % localBAMfilePath		
-
-
-## Get index
 
 
 
