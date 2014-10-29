@@ -9,7 +9,7 @@ Functions for loading existing sequencing datasets into Synapse.
 #	unit tests
 
 from synapseclient import Project, Folder, File, Activity, Evaluation
-import subprocess, os
+import subprocess, os, boto, yaml
 
 
 def readConfig(configFile):
@@ -163,6 +163,54 @@ def setUpSynapseProject(foldersToCreate,syn,pid=None,pname=None):
 		createFolder = syn.store(createFolder)
 		existingFolders[name] = createFolder.id
 	return(project, existingFolders)
+
+
+
+def getLoadedEntities(parent, syn):
+	'''Return dictionary of entities already loaded to give synapse ID.'''
+
+	loadedEntities = dict()
+	results = syn.chunkedQuery(''.join(['SELECT id, name, concreteType FROM entity WHERE parentId=="', parent, '"']))
+	for result in results:
+		if (result['entity.concreteType'][0] == 'org.sagebionetworks.repo.model.File') or (result['entity.concreteType'][0] == 'org.sagebionetworks.repo.model.FileEntity'):
+			loadedEntities[result['entity.id']] = result['entity.name']
+	return(loadedEntities)
+
+
+	
+def parseProjectAnnotations(yamlPath):
+	'''Read in annotations from file and return as dictionary.'''
+
+	dataAnnot = dict()
+	stream = open(yamlPath, 'r')
+	for key,val in yaml.load(stream).iteritems():
+		dataAnnot[key] = val
+	return(dataAnnot)
+	
+
+
+def addExternalDataToSynapse(exBucket,exFolder,toLoadSynID,annotYAML, syn):
+	'''Adds data in external S3 bucket to Synapse.'''
+
+	s3 = boto.connect_s3()
+	H3bucket = s3.get_bucket(exBucket) 
+	rnaseqDir = H3bucket.list(prefix=exFolder)
+
+	loadedEntities = getLoadedEntities(parent=toLoadSynID,syn=syn)	
+	BAMannotations = parseProjectAnnotations(yamlPath=annotYAML)
+	addedCount = 0	
+	for key in rnaseqDir:
+		if os.path.basename(key.name) in loadedEntities: 
+			print 'Skipping %s because it is already loaded to Syanpse.' % os.path.basename(key.name)
+		elif key.name.endswith('bam'):
+			s3path = '/'.join(['http://s3.amazonaws.com', exBucket, key.name])
+			BAMEntity = File(path=s3path, name=os.path.basename(key.name), description='BAM format aligned reads', parent=toLoadSynID, synapseStore=False, annotations=BAMannotations)	
+			BAMEntity = syn.store(BAMEntity)		
+			addedCount += 1
+	return(addedCount)
+
+
+	
 
 #if __name__ == "__main__":
 	#put test code here?
