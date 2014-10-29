@@ -97,18 +97,26 @@ def copyRefToWorkerNode(ref,headNFSPath,localPath):
 	return(localRefPath)
 
 
-def getBAMtoComputeNode(wd,submission=None,bucket=None,extKey=None):
+def getBAMtoComputeNode(wd,submission=None,bucket=None,extKey=None,public=False):
 	'''Locate BAM on node, copying from synapse or S3 if necessary.'''
 
+	localBAMfilePath = ''
 	if bucket is not None:
-		import boto
-		s3 = boto.connect_s3()
-		external_bucket = s3.get_bucket(bucket) 
-		bucketItem = external_bucket.get_key(extKey)
-		localBAMfilePath = os.path.join(wd, os.path.basename(extKey))
-		if not os.path.exists(localBAMfilePath):
-			print 'Getting data in bucket %s' % bucket
-			bucketItem.get_contents_to_filename(localBAMfilePath)	
+		if public is True: # using boto, requires boto credentials file locally
+			import boto
+			s3 = boto.connect_s3()
+			external_bucket = s3.get_bucket(bucket) 
+			bucketItem = external_bucket.get_key(extKey)
+			localBAMfilePath = os.path.join(wd, os.path.basename(extKey))
+			if not os.path.exists(localBAMfilePath):
+				print 'Getting data in bucket %s' % bucket
+				bucketItem.get_contents_to_filename(localBAMfilePath)	
+		else: # using AWS CLI, requires IAM roles giving acces to EC2 instance
+			localBAMfilePath = os.path.join(wd, os.path.basename(extKey))
+			cmd = ''.join(['aws s3 cp s3://', bucket, '/', extKey, ' ', localBAMfilePath])
+			if not os.path.exists(localBAMfilePath):
+				print '%s' % cmd
+				subprocess.call(cmd, shell=True)	
 	else:
 		localBAMfilePath = os.path.join(wd, submission.name)
 		if not os.path.exists(localBAMfilePath):
@@ -128,6 +136,18 @@ def getSynConfigFromHead(localPath,headPath):
 
 	if not os.path.exists(os.path.join(localPath, '.synapseConfig')):
 		shutil.copy(os.path.join(headPath, '.synapseConfig'), localPath)
+
+
+def getSubmittedBAM(evalID,syn): 
+	'''Get dictionary of all BAMs submitted to given eval.'''
+
+	submittedEntities = dict()
+	for submission in syn.getSubmissions(evalID):	
+		BAMentity = syn.get(submission['entityId'], version = submission['versionNumber'], downloadFile = False)	
+		submittedEntities[BAMentity.name] = BAMentity.id
+#		print '%s' % BAMentity.name
+	return(submittedEntities)
+	
 
 
 #if __name__ == "__main__":
