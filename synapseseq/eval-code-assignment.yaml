@@ -4,4 +4,6 @@
 2319032: eval_make_raw_counts_matrix.py
 2319033: eval_snps_samtools.py
 2319131: eval_SNV_varscan.py
-2319131: eval_browserCoverageTrack.py
+2319130: eval_browserCoverageTrack.py
+2778394: eval_counts_featureCounts.py
+2778396: eval_quant_sailfish.py
