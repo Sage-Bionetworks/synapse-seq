@@ -198,6 +198,7 @@ def addExternalDataToSynapse(exBucket,exFolder,toLoadSynID,annotYAML, syn):
 
 	loadedEntities = getLoadedEntities(parent=toLoadSynID,syn=syn)	
 	BAMannotations = parseProjectAnnotations(yamlPath=annotYAML)
+	## TODO Add bucket and key to annotations
 	addedCount = 0	
 	for key in rnaseqDir:
 		if os.path.basename(key.name) in loadedEntities: 
