@@ -94,6 +94,11 @@ def copyRefToWorkerNode(ref,headNFSPath,localPath):
 	localRefPath = os.path.join(localPath,os.path.basename(refOnHead))
 	if not os.path.exists(localRefPath):
 		shutil.copy(refOnHead, localPath)
+		if localRefPath.endswith('.tar.bz2'):
+			cmd = ' '.join(['tar -xvjf', localRefPath])
+			subprocess.call(cmd, shell=True)
+			zipPath = localRefPath
+			localRefPath = zipPath.strip('.tar.bz2')
 	return(localRefPath)
 
 
