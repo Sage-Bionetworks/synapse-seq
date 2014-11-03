@@ -47,9 +47,6 @@ for eval,code in yaml.load(stream).iteritems():
 #		print '%s' % submission.entityId
 			additionalParams = ''
 			entityAnnotations = syn.getAnnotations(submission.entityId)
-			if 'bucket' in entityAnnotations:
-				additionalParams += '--bucket ' + entityAnnotations['bucket'][0]
-				additionalParams += ' --keyname ' + entityAnnotations['key'][0]
 			if 'eval_'+str(eval) in entityAnnotations: # Are there command line params in the entity's annotations?
 				evalName = 'eval_'+str(eval)
 				if entityAnnotations[evalName][0] not in paramFiles: # check whether this file has been parsed
@@ -57,6 +54,9 @@ for eval,code in yaml.load(stream).iteritems():
 					paramFiles[entityAnnotations[evalName][0]] = additionalParams
 				else:
 					additionalParams = paramFiles[entityAnnotations[evalName][0]]
+			if 'bucket' in entityAnnotations:
+				additionalParams += '--bucket ' + entityAnnotations['bucket'][0]
+				additionalParams += ' --keyname ' + entityAnnotations['key'][0]
 
 			cmd = ' '.join(['qsub -N synapseseq -o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', codePath, '--submission', submission.id, additionalParams])
 
