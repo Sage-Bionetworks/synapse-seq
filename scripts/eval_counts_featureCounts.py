@@ -58,10 +58,6 @@ print >> commandsFile, '%s' % localBAMfilePath
 
 
 ## Run featurecounts step
-
-# outputDir = os.path.join(wd, prefix+'_count')
-# if not os.path.exists(outputDir):
-# 	os.mkdir(outputDir) 
 outputFile = os.path.join(wd, prefix+'_gene_counts.txt')
 
 os.chdir(wd) # Attempt to redirect temp output files to this location, since they seem to go to the wd with no option to specify elsewhere.
