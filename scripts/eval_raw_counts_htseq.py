@@ -3,9 +3,7 @@
 # KKD for Sage Bionetworks
 # Requires: htseq installed globally
 
-import synapseclient, os, argparse, subprocess, sys, boto
-from synapseclient import *
-sys.path.append('/home/ubuntu/bin/synapseseq') # AWS cloudbiolinux
+import synapseclient, os, argparse, subprocess, sys, boto, synapseseq
 import seq_loading as sl
 
 parser = argparse.ArgumentParser(description='Runs Synapse read counting workflow using HTSeq.')
@@ -21,8 +19,8 @@ args = parser.parse_args()
 syn = synapseclient.Synapse()
 syn.login()
 
-BAMentity = syn.get(args.bam, downloadFile = False)
-BAMannotations = syn.getAnnotations(BAMentity)
+BAMentity = syn.getSubmission(args.bam, downloadFile = False)
+BAMannotations = syn.getAnnotations(BAMentity.entityId)
 
 GTFentity = syn.get(args.gtf, downloadFile = False)
 print 'Using gene models found in %s' % GTFentity.name
@@ -91,10 +89,13 @@ if not os.path.exists(outputFile):
 print '%s' % outputFile
 countEntityID = sl.add_workflow_step_to_synapse(os.path.join(args.wd, outputFile), stepDict=provDict, parentid=args.sid, syn=syn)
 
+status = syn.getSubmissionStatus(BAMentity)
+status.status = 'CLOSED' # Closed is functioning as "completed" for now.
+status = syn.store(status)
 
-### Submit result to synapse count Eval
-countEntity = syn.get(countEntityID, downloadFile = False)
-countEval = syn.getEvaluation('2313942') # 2313942 is counts_HTseq
-profile = syn.getUserProfile() 
-submission = syn.submit(entity=countEntity, evaluation = countEval.id,  name = countEntity.name, teamName = profile['displayName'])
-print 'Submitted %s to %s' % (countEntity.name, countEval.name)
+### Submit result to synapse counted Eval?
+# countEntity = syn.get(countEntityID, downloadFile = False)
+# countEval = syn.getEvaluation('2313942') # 2313942 is counts_HTseq
+# profile = syn.getUserProfile() 
+# submission = syn.submit(entity=countEntity, evaluation = countEval.id,  name = countEntity.name, teamName = profile['displayName'])
+# print 'Submitted %s to %s' % (countEntity.name, countEval.name)
