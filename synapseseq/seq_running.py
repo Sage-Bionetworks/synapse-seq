@@ -73,7 +73,7 @@ def calc_md5(inFile):
 	return(md5.hexdigest())
 
 
-def locateRefOnHeadNode(ref,headNFSPath):
+def locateRefOnHeadNode(ref,headNFSPath, syn):
 	'''Locate reference on head node NFS.'''
 
 	if ref.startswith('syn'):
@@ -87,22 +87,22 @@ def locateRefOnHeadNode(ref,headNFSPath):
 	return(reference)
 
 
-def copyRefToWorkerNode(ref,headNFSPath,localPath):
+def copyRefToWorkerNode(ref,headNFSPath,localPath, syn):
 	'''Copy reference from head node NFS to worker.'''
 	
-	refOnHead = locateRefOnHeadNode(ref=ref,headNFSPath=headNFSPath)
+	refOnHead = locateRefOnHeadNode(ref=ref,headNFSPath=headNFSPath,syn=syn)
 	localRefPath = os.path.join(localPath,os.path.basename(refOnHead))
-	if not os.path.exists(localRefPath):
+	if not os.path.exists(localRefPath) and not os.path.isdir(localRefPath.strip('.tar.bz2')):
 		shutil.copy(refOnHead, localPath)
 		if localRefPath.endswith('.tar.bz2'):
-			cmd = ' '.join(['tar -xvjf', localRefPath])
+			cmd = ' '.join(['tar -xvjf', localRefPath, '-C', localPath])
 			subprocess.call(cmd, shell=True)
 			zipPath = localRefPath
 			localRefPath = zipPath.strip('.tar.bz2')
 	return(localRefPath)
 
 
-def getBAMtoComputeNode(wd,submission=None,bucket=None,extKey=None,public=False):
+def getBAMtoComputeNode(wd,syn,submission=None,bucket=None,extKey=None,public=False):
 	'''Locate BAM on node, copying from synapse or S3 if necessary.'''
 
 	localBAMfilePath = ''
@@ -119,9 +119,9 @@ def getBAMtoComputeNode(wd,submission=None,bucket=None,extKey=None,public=False)
 		else: # using AWS CLI, requires IAM roles giving acces to EC2 instance
 			localBAMfilePath = os.path.join(wd, os.path.basename(extKey))
 			cmd = ''.join(['aws s3 cp s3://', bucket, '/', extKey, ' ', localBAMfilePath])
-			if not os.path.exists(localBAMfilePath):
-				print '%s' % cmd
-				subprocess.call(cmd, shell=True)	
+			#if not os.path.exists(localBAMfilePath):
+			print '%s' % cmd
+			subprocess.call(cmd, shell=True)	
 	else:
 		localBAMfilePath = os.path.join(wd, submission.name)
 		if not os.path.exists(localBAMfilePath):
