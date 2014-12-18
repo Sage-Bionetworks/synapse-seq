@@ -16,8 +16,9 @@ args = parser.parse_args()
 syn = synapseclient.login()
 profile = syn.getUserProfile() 
 evalListFile = syn.get(args.synid, downloadFile = True) # yaml file
+multipleThreads = False
 
-
+# Need to re-write this parsing to save num threads to a variable to use in qsub command
 def parseJobParameters(synapseID):
 	yamlFileEntity = syn.get(synapseID)
 	stream = open(yamlFileEntity.path, 'r')
@@ -26,6 +27,7 @@ def parseJobParameters(synapseID):
 	for params in yaml.load(stream).iteritems():
 		for item in params:
 			jobParams += ' '+str(item)
+			if str(item) == 'threads': multipleThreads = True
 	jobParams += ' --params '+synapseID
 	print 'Read these params: %s' % jobParams
 	return(jobParams)
@@ -35,6 +37,7 @@ paramFiles = dict()
 stream = open(evalListFile.path, 'r')
 for eval,code in yaml.load(stream).iteritems():
 	print 'eval %s: code file: %s' % (eval, code)
+	multipleThreads = False
 	
 	codePath = os.path.join(args.bin, code)
 
@@ -52,13 +55,17 @@ for eval,code in yaml.load(stream).iteritems():
 				if entityAnnotations[evalName][0] not in paramFiles: # check whether this file has been parsed
 					additionalParams = parseJobParameters(entityAnnotations[evalName][0])
 					paramFiles[entityAnnotations[evalName][0]] = additionalParams
+					if 'threads' in additionalParams:
+						multipleThreads = True
 				else:
 					additionalParams = paramFiles[entityAnnotations[evalName][0]]
 			if 'bucket' in entityAnnotations:
-				additionalParams += '--bucket ' + entityAnnotations['bucket'][0]
-				additionalParams += ' --keyname ' + entityAnnotations['key'][0]
-
-			cmd = ' '.join(['qsub -N synapseseq -o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', codePath, '--submission', submission.id, additionalParams])
+				additionalParams += ' --bucket ' + entityAnnotations['bucket'][0]
+				additionalParams += ' --keyname ' + entityAnnotations['keyname'][0]
+			if (multipleThreads):
+				cmd = ' '.join(['qsub -N synapseseq -pe orte', '2', '-o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', codePath, '--submission', submission.id, additionalParams])
+			else:
+				cmd = ' '.join(['qsub -N synapseseq -o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', codePath, '--submission', submission.id, additionalParams])
 
 			print '%s' % cmd
  			subprocess.call(cmd, shell = True)
