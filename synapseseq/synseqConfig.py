@@ -8,3 +8,8 @@ headNFSPath = '/home/cbl_data/'
 localWDPath = '/mnt/' # Execution node wd on cloudbiolinux
 
 sailfishMetricsTable = 'syn2907457'
+
+
+# References
+GRCh38_star_RL100 = 'Hsapiens_GRCh38/star_index/Gencode_RL100/'
+
