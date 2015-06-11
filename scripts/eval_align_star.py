@@ -18,6 +18,7 @@ parser.add_argument('--submission', required=True, dest='bam', help='Submission 
 parser.add_argument('--params', required=True, help='Synapse ID of the parameter file for this job.')
 parser.add_argument('--ref', dest='ref', required=True, help='Synapse ID of reference genome used for alignment.', default=None)
 parser.add_argument('--output', dest='out', required=True, help='Synapse ID of project or folder to contain the output data.')
+parser.add_argument('--threads', dest='threads', required=True, help='Number cpus to use per job')
 parser.add_argument('--bucket', dest='bucket', required=False, help='Bucket name if not stored in Synapse.', default=None)
 parser.add_argument('--keyname', dest='key', required=False, help='Key name if not stored in Synapse.', default=None)
 args = parser.parse_args()
@@ -44,7 +45,9 @@ index = os.path.join(syncfg.headNFSPath, syncfg.GRCh38_star_RL100)
 
 ## Get submission
 submission = syn.getSubmission(args.bam, downloadFile = False)
-localBAMfilePath = sr.getBAMtoComputeNode(wd=wd,syn=syn,submission=submission,bucket=args.bucket,extKey=args.key)
+BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = True, downloadLocation = wd)
+localBAMfilePath = os.path.join(wd, submission.name)
+#localBAMfilePath = sr.getBAMtoComputeNode(wd=wd,syn=syn,submission=submission,bucket=args.bucket,extKey=args.key)
 prefix = os.path.basename(localBAMfilePath).rstrip('.bam')
 cfPath = os.path.join(wd, '_'.join([prefix, evalName, 'commands.txt']))
 commandsFile = open(os.path.join(wd, cfPath),'w')
@@ -74,7 +77,7 @@ outputDir = os.path.join(wd, prefix+'_align')
 if not os.path.exists(outputDir):
 	os.mkdir(outputDir) 
 
-cmd = ' '.join(['STAR --runMode alignReads --runThreadN 4 --genomeDir', index, '--readFilesIn', R1file, R2file, '--outFileNamePrefix', os.path.join(outputDir,prefix+'.'), '--outSAMtype BAM SortedByCoordinate --outSAMunmapped Within'])
+cmd = ' '.join(['STAR --runMode alignReads --runThreadN', args.threads, '--genomeDir', index, '--readFilesIn', R1file, R2file, '--outFileNamePrefix', os.path.join(outputDir,prefix+'.'), '--outSAMtype BAM SortedByCoordinate --outSAMunmapped Within'])
 if not os.path.exists(os.path.join(outputDir, prefix+'.Aligned.sortedByCoord.out.bam')):
 	print >> commandsFile, '%s' % cmd
 	subprocess.call(cmd, shell = True)
@@ -98,12 +101,6 @@ alignEntity = syn.store(alignEntity, forceVersion=False, activity=act)
 syn.setAnnotations(alignEntity, annotations=dict(fileType='BAM',includeUnmapped=True))
 print 'new entity id %s' % alignEntity.id
  
-# Load bias-corrected file to Synapse File. ## *****
-print 'Loading %s to Synapse.' % os.path.join(wd, prefix+'_quant_bias_corrected.sf')
-quantBCEntity = File(path=os.path.join(wd, prefix+'_quant_bias_corrected.sf'), name=prefix+'_quant_bias_corrected.sf', description='Quantified transcript isoforms.', parentId=args.out, synapseStore=True)	
-quantBCEntity = syn.store(quantBCEntity, forceVersion=False, activity=act)
-syn.setAnnotations(quantBCEntity, annotations=dict(fileType='quantitation',normalized='TPM',summaryLevel='transcript',biasCorrection='True'))
-print 'new entity id %s' % quantBCEntity.id
 
 
 
@@ -127,6 +124,6 @@ os.remove(R2file)
 shutil.rmtree(wd)
 
 # change status of BAM 
-status = syn.getSubmissionStatus(submission)
-status.status = 'SCORED' # Scored is functioning as "finished" for now.
-status = syn.store(status)
+# status = syn.getSubmissionStatus(submission)
+# status.status = 'SCORED' # Scored is functioning as "finished" for now.
+# status = syn.store(status)
