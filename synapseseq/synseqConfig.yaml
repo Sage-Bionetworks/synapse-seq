@@ -1,0 +1,26 @@
+system:
+# System paths
+    workerUserName: ubuntu
+    sailfishPath: /home/ubuntu/bin/Sailfish-0.6.3-Linux_x86-64
+    picard: /usr/local/share/java/picard-1.96/
+    headNFSPath: /home/cbl_data/
+    localWDPath: /mnt/ # Execution node wd on cloudbiolinux
+workflow:
+# workflow parameters
+    sailfishMetricsTable: syn2907457
+    threads: 4
+    order: [eval_align_star, eval_quant_featurecounts]
+eval_align_star:
+    id: 1234567
+    ref: syn4311922
+    index: Hsapiens_GRCh38/star_index/Gencode_RL100/
+    output: syn4305793
+    input-suffix: bam
+    keep-local: True
+eval_quant_featurecounts:
+    id: 1234567
+    ref: syn1234567
+    output: syn9999999
+
+
+
