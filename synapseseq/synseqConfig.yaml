@@ -7,20 +7,30 @@ system:
     localWDPath: /mnt/ # Execution node wd on cloudbiolinux
 workflow:
 # workflow parameters
-    sailfishMetricsTable: syn2907457
     threads: 4
-    order: [eval_align_star, eval_quant_featurecounts]
-eval_align_star:
-    id: 1234567
+    output: syn4584500
+    keep-local: True
+samtofastq:
+urqt:
+    metricsTable: syn4616136    
+star:
     ref: syn4311922
     index: Hsapiens_GRCh38/star_index/Gencode_RL100/
-    output: syn4305793
-    input-suffix: bam
-    keep-local: True
-eval_quant_featurecounts:
-    id: 1234567
+    output: syn4584500
+    metricsTable: syn4584502
+    annotations:
+picardRNA:
+    metricsTable: syn4597336
+    refflat: gencode.v22.chr_patch_hapl_scaff.annotation.refFlat.txt
+    rRNAintervals: rRNA_intervals.sam_list
+featurecounts:
     ref: syn1234567
-    output: syn9999999
+    gtf: gencode.v22.chr_patch_hapl_scaff.annotation.gtf
+    output: syn4584500
+    metricsTable: syn4601557
+    count-unit: gene
+    strand: no
+    annotations:
 
 
 
