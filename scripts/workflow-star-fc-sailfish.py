@@ -7,7 +7,7 @@
 
 import os, argparse, subprocess, sys, time, shutil, yaml
 import synapseclient, synapseseq
-from synapseclient import File, Table
+from synapseclient import File, Table, Activity
 from synapseseq import seq_running as sr
 from picard_parser import PicardParser
 
@@ -44,8 +44,10 @@ if not os.path.exists(os.path.join(wd, 'tmp')):
 
 
 ## Get submission
-submission = syn.getSubmission(args.submission, downloadFile = True, downloadLocation = wd)
+submission = syn.getSubmission(args.submission, downloadFile = False)
 localInputFilePath = os.path.join(wd, submission.name)
+if not os.path.exists(localInputFilePath):
+	submission = syn.getSubmission(args.submission, downloadFile = True, downloadLocation = wd)
 prefix = os.path.basename(localInputFilePath).rstrip('.bam')
 cfPath = os.path.join(wd, '_'.join([prefix, evaluation.name, 'commands.txt']))
 commandsFile = open(os.path.join(wd, cfPath),'w')
@@ -98,11 +100,19 @@ elif args.debug is True:
 	print >> commandsFile, '%s' % cmd
 
 
+## Load output BAM file 
+print 'Loading %s to Synapse.' % outBAMfile
+outBAMEntity = File(path=outBAMfile, name=os.path.basename(outBAMfile), description='Aligned reads in BAM format.', parentId=config['star']['output'], synapseStore=True)
+outBAMEntity = syn.store(outBAMEntity, forceVersion=False)
+syn.setAnnotations(outBAMEntity, annotations=config['star']['annotations'])
+print 'new entity id %s' % outBAMEntity.id
+
+
 
 ### Run Picard metrics
-cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'CollectRnaSeqMetrics.jar'), 'REF_FLAT=', os.path.join(config['system']['headNFSPath'], config['picardRNA']['refflat']), ' RIBOSOMAL_INTERVALS=', os.path.join(config['system']['headNFSPath'], config['picardRNA']['rRNAintervals']), 'STRAND_SPECIFICITY=NONE CHART_OUTPUT=', os.path.basename(outBAMfile)+'.pdf', 'INPUT=', outBAMfile, 'OUTPUT=', os.path.basename(outBAMfile)+'.picardRNA', 'ASSUME_SORTED=true'])
+cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'CollectRnaSeqMetrics.jar'), 'REF_FLAT=', os.path.join(config['system']['headNFSPath'], config['picardRNA']['refflat']), ' RIBOSOMAL_INTERVALS=', os.path.join(config['system']['headNFSPath'], config['picardRNA']['rRNAintervals']), 'STRAND_SPECIFICITY=NONE CHART_OUTPUT=', os.path.join(wd, os.path.basename(outBAMfile)+'.pdf'), 'INPUT=', outBAMfile, 'OUTPUT=', os.path.join(wd, os.path.basename(outBAMfile)+'.picardRNA'), 'ASSUME_SORTED=true'])
 
-if not os.path.exists(os.path.basename(outBAMfile)+'.picardRNA'):
+if not os.path.exists(os.path.join(wd, os.path.basename(outBAMfile)+'.picardRNA')):
 	print >> commandsFile, '%s' % cmd
 	subprocess.call(cmd, shell = True)
 elif args.debug is True:
@@ -142,18 +152,18 @@ print 'Loading %s to Synapse.' % cfPath
 cf = File(path=cfPath, description='Job commands.', parentId=config['workflow']['output'], synapseStore=True)
 cf = syn.store(cf)
 
-## Load output BAM file 
-print 'Loading %s to Synapse.' % outBAMfile
-outBAMEntity = File(path=outBAMfile, name=os.path.basename(outBAMfile), description='Aligned reads in BAM format.', parentId=config['star']['output'], synapseStore=True)
-outBAMEntity = syn.store(outBAMEntity, forceVersion=False, activityName='Alignment', activityDescription='Alignment of reads to human genome.', used=[{'targetId':submission.entityId, 'targetVersionNumber':submission.versionNumber}, config['star']['ref']], executed=[cf.id, 'syn2243150', 'syn4566096'])
-syn.setAnnotations(outBAMEntity, annotations=config['star']['annotations'])
-print 'new entity id %s' % outBAMEntity.id
+## Set provenance on BAM
+align = Activity(name='Alignment', description='Alignment of reads to human genome.', executed=[cf.id, 'syn2243150', 'syn4566096'])
+align.used({'reference':{'targetId':submission.entityId, 'targetVersionNumber':submission.versionNumber}})
+align.used(config['star']['ref'])
+syn.setProvenance(outBAMEntity, align)
 
 ## Load output counts file 
 print 'Loading %s to Synapse.' % outCountsFile
 outCountsEntity = File(path=outCountsFile, name=os.path.basename(outCountsFile), description='Gene or exon counts based on alignment to human genome.', parentId=config['featurecounts']['output'], synapseStore=True)	
+outCountsEntity = syn.store(outCountsEntity, forceVersion=False, activityName='Quantitation', activityDescript='Counting reads that align to gene models.', used=[config['featurecounts']['ref']], executed=[cf.id, 'syn2807330'])
 outCountsEntity = syn.store(outCountsEntity, forceVersion=False, activityName='Quantitation', activityDescript='Counting reads that align to gene models.', used=[outBAMEntity, config['featurecounts']['ref']], executed=[cf.id, 'syn2807330'])
-syn.setAnnotations(outCountsEntity, annotations=config['featurecounts']['annotations'])
+#syn.setAnnotations(outCountsEntity, annotations=config['featurecounts']['annotations'])
 print 'new entity id %s' % outCountsEntity.id
 
  
@@ -184,13 +194,13 @@ with open(outLogFile) as metricsFile:
 	for line in metricsFile:
 		vals = line.split('|')
 		if len(vals) > 1:
-			metrics.append(vals[1].lstrip())
+			metrics.append(vals[1].strip().rstrip('%'))
 metricsFile.close()
 syn.store(Table(table, [metrics]))
 
 
 ## PicardRNA
-pp  = PicardParser(filename=os.path.basename(outBAMfile)+'.picardRNA')
+pp  = PicardParser(filename=os.path.join(wd,os.path.basename(outBAMfile)+'.picardRNA'))
 table = syn.get(config['picardRNA']['metricsTable'])
 metrics = [prefix, args.submission]
 for item in pp.metrics.itervalues():
@@ -201,7 +211,7 @@ syn.store(Table(table, [metrics]))
 ## featurecounts
 table = syn.get(config['featurecounts']['metricsTable'])
 metrics = [prefix, args.submission]
-outLogFile = os.path.join(outputDir, prefix+'.summary')
+outLogFile = os.path.join(wd, prefix+'_gene_counts.txt.summary')
 with open(outLogFile) as metricsFile:	
 	for line in metricsFile:
 		if line.startswith('Status'): continue
