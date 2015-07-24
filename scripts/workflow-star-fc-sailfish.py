@@ -5,7 +5,7 @@
 # Uses max 31GB RAM
 
 
-import os, argparse, subprocess, sys, time, shutil, yaml
+import os, argparse, subprocess, sys, time, shutil, yaml, random
 import synapseclient, synapseseq
 from synapseclient import File, Table, Activity
 from synapseseq import seq_running as sr
@@ -71,17 +71,41 @@ elif args.debug is True:
 
 
 ### Quality trim FASTQ files
+random.seed()
+tmpPre = str(random.randint(0, 9999999))
+
 R1TrimFile = os.path.join(wd, prefix + '_R1_trimmed.fq.gz')
 R2TrimFile = os.path.join(wd, prefix + '_R2_trimmed.fq.gz')
+tempR1TrimFile = os.path.join(wd, tmpPre + '_R1.fq.gz')
+tempR2TrimFile = os.path.join(wd, tmpPre + '_R2.fq.gz')
 trimOutFile = os.path.join(wd, prefix + '_trim.stdout')
 
-cmd = ' '.join(['UrQt --in', R1file, '--inpair', R2file, '--out', R1TrimFile, '--outpair', R2TrimFile, '--gz --m', str(config['workflow']['threads']), '--min_read_size 30 --phred 33 --t 20 --buffer 100000 >', trimOutFile])
+cmd = ' '.join(['UrQt --in', R1file, '--inpair', R2file, '--out', tempR1TrimFile, '--outpair', tempR2TrimFile, '--gz --m', str(config['workflow']['threads']), '--min_read_size 30 --phred 33 --t 20 --buffer 100000 >', trimOutFile])
 
 if not os.path.exists(R1TrimFile) or not os.path.exists(R2TrimFile):
 	print >> commandsFile, '%s' % cmd
 	subprocess.call(cmd, shell = True)
+	os.rename(tempR1TrimFile, R1TrimFile)
+	os.rename(tempR2TrimFile, R2TrimFile)
 elif args.debug is True:
 	print >> commandsFile, '%s' % cmd	
+	
+
+## Trim metrics
+table = syn.get(config['urqt']['metricsTable'])
+metrics = [prefix, args.submission]
+with open(trimOutFile) as metricsFile:	
+	for line in metricsFile:
+		vals = line.split(':')
+		if len(vals) == 2:
+			data_vals = vals[1].strip().split()
+			if len(data_vals) == 1:
+				metrics.append(vals[1].strip())
+			if len(data_vals) == 2:
+				metrics.append(data_vals[1].strip('()%'))
+metricsFile.close()
+syn.store(Table(table, [metrics]))
+
 
 
 ### Run STAR
@@ -104,8 +128,22 @@ elif args.debug is True:
 print 'Loading %s to Synapse.' % outBAMfile
 outBAMEntity = File(path=outBAMfile, name=os.path.basename(outBAMfile), description='Aligned reads in BAM format.', parentId=config['star']['output'], synapseStore=True)
 outBAMEntity = syn.store(outBAMEntity, forceVersion=False)
-syn.setAnnotations(outBAMEntity, annotations=config['star']['annotations'])
+#syn.setAnnotations(outBAMEntity, annotations=config['star']['annotations'])
 print 'new entity id %s' % outBAMEntity.id
+
+
+## Star metrics
+table = syn.get(config['star']['metricsTable'])
+metrics = [prefix, args.submission]
+outLogFile = os.path.join(outputDir, prefix+'.Log.final.out')
+with open(outLogFile) as metricsFile:	
+	for line in metricsFile:
+		vals = line.split('|')
+		if len(vals) > 1:
+			metrics.append(vals[1].strip().rstrip('%'))
+metricsFile.close()
+syn.store(Table(table, [metrics]))
+
 
 
 
@@ -117,6 +155,15 @@ if not os.path.exists(os.path.join(wd, os.path.basename(outBAMfile)+'.picardRNA'
 	subprocess.call(cmd, shell = True)
 elif args.debug is True:
 	print >> commandsFile, '%s' % cmd
+
+## PicardRNA
+pp  = PicardParser(filename=os.path.join(wd,os.path.basename(outBAMfile)+'.picardRNA'))
+table = syn.get(config['picardRNA']['metricsTable'])
+metrics = [prefix, args.submission]
+for item in pp.metrics.itervalues():
+	metrics.append(item)
+syn.store(Table(table, [metrics]))
+
 
 
 
@@ -136,6 +183,18 @@ if not os.path.exists(outCountsFile):
 	subprocess.call(cmd, shell = True)
 elif args.debug is True:
 	print >> commandsFile, '%s' % cmd
+
+## featurecounts
+table = syn.get(config['featurecounts']['metricsTable'])
+metrics = [prefix, args.submission]
+outLogFile = os.path.join(wd, prefix+'_gene_counts.txt.summary')
+with open(outLogFile) as metricsFile:	
+	for line in metricsFile:
+		if line.startswith('Status'): continue
+		metrics.append(line.split()[1])
+metricsFile.close()
+syn.store(Table(table, [metrics]))
+
 
 
 ### Run sailfish
@@ -167,62 +226,6 @@ outCountsEntity = syn.store(outCountsEntity, forceVersion=False, activityName='Q
 print 'new entity id %s' % outCountsEntity.id
 
  
-
-# Load metrics to Synapse table
-
-## Trim metrics
-table = syn.get(config['urqt']['metricsTable'])
-metrics = [prefix, args.submission]
-with open(trimOutFile) as metricsFile:	
-	for line in metricsFile:
-		vals = line.split(':')
-		if len(vals) == 2:
-			data_vals = vals[1].strip().split()
-			if len(data_vals) == 1:
-				metrics.append(vals[1].strip())
-			if len(data_vals) == 2:
-				metrics.append(data_vals[1].strip('()%'))
-metricsFile.close()
-syn.store(Table(table, [metrics]))
-
-
-## Star metrics
-table = syn.get(config['star']['metricsTable'])
-metrics = [prefix, args.submission]
-outLogFile = os.path.join(outputDir, prefix+'.Log.final.out')
-with open(outLogFile) as metricsFile:	
-	for line in metricsFile:
-		vals = line.split('|')
-		if len(vals) > 1:
-			metrics.append(vals[1].strip().rstrip('%'))
-metricsFile.close()
-syn.store(Table(table, [metrics]))
-
-
-## PicardRNA
-pp  = PicardParser(filename=os.path.join(wd,os.path.basename(outBAMfile)+'.picardRNA'))
-table = syn.get(config['picardRNA']['metricsTable'])
-metrics = [prefix, args.submission]
-for item in pp.metrics.itervalues():
-	metrics.append(item)
-syn.store(Table(table, [metrics]))
-
-
-## featurecounts
-table = syn.get(config['featurecounts']['metricsTable'])
-metrics = [prefix, args.submission]
-outLogFile = os.path.join(wd, prefix+'_gene_counts.txt.summary')
-with open(outLogFile) as metricsFile:	
-	for line in metricsFile:
-		if line.startswith('Status'): continue
-		metrics.append(line.split()[1])
-metricsFile.close()
-syn.store(Table(table, [metrics]))
-
-
-## sailfish
-# **********
-
 
 ## clean up local files
 if 'keep-local' not in config['workflow']:
