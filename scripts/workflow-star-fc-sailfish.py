@@ -57,38 +57,64 @@ print >> commandsFile, '%s' % localInputFilePath
 
 ## Run workflow
 
-### Run samtofastq ** Need to handle SE reads
-R1file = os.path.join(wd, prefix + '_R1.fastq')
-R2file = os.path.join(wd, prefix + '_R2.fastq')
+if config['workflow']['paired'] is False:
+	R1file = os.path.join(wd, prefix + '_SE.fastq')
+	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp'), '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=/dev/stdin FASTQ=', R1file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT'])
 
-cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp'), '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=/dev/stdin FASTQ=', R1file, 'SECOND_END_FASTQ=', R2file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT'])
+	if not os.path.exists(R1file):
+		print >> commandsFile, '%s' % cmd
+		subprocess.call(cmd, shell = True)
+	elif args.debug is True:
+		print >> commandsFile, '%s' % cmd
 
-if not os.path.exists(R1file) or not os.path.exists(R2file):
-	print >> commandsFile, '%s' % cmd
-	subprocess.call(cmd, shell = True)
-elif args.debug is True:
-	print >> commandsFile, '%s' % cmd
+else:
+	R1file = os.path.join(wd, prefix + '_R1.fastq')
+	R2file = os.path.join(wd, prefix + '_R2.fastq')
+	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp'), '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=/dev/stdin FASTQ=', R1file, 'SECOND_END_FASTQ=', R2file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT'])
+
+	if not os.path.exists(R1file) or not os.path.exists(R2file):
+		print >> commandsFile, '%s' % cmd
+		subprocess.call(cmd, shell = True)
+	elif args.debug is True:
+		print >> commandsFile, '%s' % cmd
+
 
 
 ### Quality trim FASTQ files
 random.seed()
 tmpPre = str(random.randint(0, 9999999))
 
-R1TrimFile = os.path.join(wd, prefix + '_R1_trimmed.fq.gz')
-R2TrimFile = os.path.join(wd, prefix + '_R2_trimmed.fq.gz')
-tempR1TrimFile = os.path.join(wd, tmpPre + '_R1.fq.gz')
-tempR2TrimFile = os.path.join(wd, tmpPre + '_R2.fq.gz')
-trimOutFile = os.path.join(wd, prefix + '_trim.stdout')
+if config['workflow']['paired'] is False:
+	R1TrimFile = os.path.join(wd, prefix + '_SE_trimmed.fq.gz')
+	tempR1TrimFile = os.path.join(wd, tmpPre + '_SE.fq.gz')
+	trimOutFile = os.path.join(wd, prefix + '_trim.stdout')
+	R2TrimFile = ''
 
-cmd = ' '.join(['UrQt --in', R1file, '--inpair', R2file, '--out', tempR1TrimFile, '--outpair', tempR2TrimFile, '--gz --m', str(config['workflow']['threads']), '--min_read_size 30 --phred 33 --t 20 --buffer 100000 >', trimOutFile])
+	cmd = ' '.join(['UrQt --in', R1file, '--out', tempR1TrimFile, '--gz --m', str(config['workflow']['threads']), '--min_read_size 30 --phred 33 --t 20 --buffer 100000 >', trimOutFile])
 
-if not os.path.exists(R1TrimFile) or not os.path.exists(R2TrimFile):
-	print >> commandsFile, '%s' % cmd
-	subprocess.call(cmd, shell = True)
-	os.rename(tempR1TrimFile, R1TrimFile)
-	os.rename(tempR2TrimFile, R2TrimFile)
-elif args.debug is True:
-	print >> commandsFile, '%s' % cmd	
+	if not os.path.exists(R1TrimFile):
+		print >> commandsFile, '%s' % cmd
+		subprocess.call(cmd, shell = True)
+		os.rename(tempR1TrimFile, R1TrimFile)
+	elif args.debug is True:
+		print >> commandsFile, '%s' % cmd	
+
+else:
+	R1TrimFile = os.path.join(wd, prefix + '_R1_trimmed.fq.gz')
+	R2TrimFile = os.path.join(wd, prefix + '_R2_trimmed.fq.gz')
+	tempR1TrimFile = os.path.join(wd, tmpPre + '_R1.fq.gz')
+	tempR2TrimFile = os.path.join(wd, tmpPre + '_R2.fq.gz')
+	trimOutFile = os.path.join(wd, prefix + '_trim.stdout')
+
+	cmd = ' '.join(['UrQt --in', R1file, '--inpair', R2file, '--out', tempR1TrimFile, '--outpair', tempR2TrimFile, '--gz --m', str(config['workflow']['threads']), '--min_read_size 30 --phred 33 --t 20 --buffer 100000 >', trimOutFile])
+
+	if not os.path.exists(R1TrimFile) or not os.path.exists(R2TrimFile):
+		print >> commandsFile, '%s' % cmd
+		subprocess.call(cmd, shell = True)
+		os.rename(tempR1TrimFile, R1TrimFile)
+		os.rename(tempR2TrimFile, R2TrimFile)
+	elif args.debug is True:
+		print >> commandsFile, '%s' % cmd	
 	
 
 ## Trim metrics
@@ -103,6 +129,8 @@ with open(trimOutFile) as metricsFile:
 				metrics.append(vals[1].strip())
 			if len(data_vals) == 2:
 				metrics.append(data_vals[1].strip('()%'))
+		if config['workflow']['paired'] is False:
+			metrics.extend(list('NA', 'NA', 'NA', 'NA', 'NA'))
 metricsFile.close()
 syn.store(Table(table, [metrics]))
 
@@ -148,7 +176,15 @@ syn.store(Table(table, [metrics]))
 
 
 ### Run Picard metrics
-cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'CollectRnaSeqMetrics.jar'), 'REF_FLAT=', os.path.join(config['system']['headNFSPath'], config['picardRNA']['refflat']), ' RIBOSOMAL_INTERVALS=', os.path.join(config['system']['headNFSPath'], config['picardRNA']['rRNAintervals']), 'STRAND_SPECIFICITY=NONE CHART_OUTPUT=', os.path.join(wd, os.path.basename(outBAMfile)+'.pdf'), 'INPUT=', outBAMfile, 'OUTPUT=', os.path.join(wd, os.path.basename(outBAMfile)+'.picardRNA'), 'ASSUME_SORTED=true'])
+#For strand-specific library prep. For unpaired reads, use FIRST_READ_TRANSCRIPTION_STRAND if the reads are expected to be on the transcription strand. Required. Possible values: {NONE, FIRST_READ_TRANSCRIPTION_STRAND, SECOND_READ_TRANSCRIPTION_STRAND}
+if config['workflow']['stranded'] is 'First':
+	strand = 'FIRST_READ_TRANSCRIPTION_STRAND'
+elif config['workflow']['stranded'] is 'Second':
+	strand = 'SECOND_READ_TRANSCRIPTION_STRAND'
+else:
+	strand = 'NONE'
+
+cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'CollectRnaSeqMetrics.jar'), 'REF_FLAT=', os.path.join(config['system']['headNFSPath'], config['picardRNA']['refflat']), ' RIBOSOMAL_INTERVALS=', os.path.join(config['system']['headNFSPath'], config['picardRNA']['rRNAintervals']), 'STRAND_SPECIFICITY='+strand, 'CHART_OUTPUT=', os.path.join(wd, os.path.basename(outBAMfile)+'.pdf'), 'INPUT=', outBAMfile, 'OUTPUT=', os.path.join(wd, os.path.basename(outBAMfile)+'.picardRNA'), 'ASSUME_SORTED=true'])
 
 if not os.path.exists(os.path.join(wd, os.path.basename(outBAMfile)+'.picardRNA')):
 	print >> commandsFile, '%s' % cmd
@@ -169,14 +205,29 @@ syn.store(Table(table, [metrics]))
 
 ### Run featurecounts
 outCountsFile = os.path.join(wd, prefix+'_gene_counts.txt')
-
 gtf = os.path.join(config['system']['headNFSPath'], config['featurecounts']['gtf'])
-
 os.chdir(wd) # Attempt to redirect temp output files to this location, since they seem to go to the wd with no option to specify elsewhere.
-if (config['featurecounts']['count-unit'] is 'exon'): # If exon counting specified
-	cmd = ' '.join(['featureCounts -p -t exon -g gene_id -a', gtf, '-o', outCountsFile, '-s', config['featurecounts']['strand'], '-T', config['workflow']['threads'], '-f', outBAMfile])
+
+# strand specificity: 
+# Indicate if strand-specific read counting should be performed. It has three possible values: 0 (unstranded), 1 (stranded) and 2 (reversely stranded). 0 by default. For paired-end reads, strand of the first read is taken as the strand of the whole fragment and FLAG field of the current read is used to tell if it is the first read in the fragment
+if config['workflow']['stranded'] is 'First':
+	strand = '1'
+elif config['workflow']['stranded'] is 'Second':
+	strand = '2'
 else:
-	cmd = ' '.join(['featureCounts -p -t exon -g gene_id -a', gtf, '-o', outCountsFile, '-s', str(config['featurecounts']['strand']), '-T', str(config['workflow']['threads']), outBAMfile])
+	strand = '0'
+
+# paired end
+if config['workflow']['paired'] is False:
+	fc = 'featureCounts'
+else:
+	fc = 'featureCounts -p'
+
+# exon vs gene		
+if (config['featurecounts']['count-unit'] is 'exon'): # If exon counting specified
+	cmd = ' '.join([fc, '-t exon -g gene_id -a', gtf, '-o', outCountsFile, '-s', strand, '-T', config['workflow']['threads'], '-f', outBAMfile])
+else:
+	cmd = ' '.join([fc, '-t exon -g gene_id -a', gtf, '-o', outCountsFile, '-s', strand, '-T', str(config['workflow']['threads']), outBAMfile])
 
 if not os.path.exists(outCountsFile):
 	print >> commandsFile, '%s' % cmd
