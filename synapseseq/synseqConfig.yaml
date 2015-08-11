@@ -10,6 +10,8 @@ workflow:
     threads: 4
     output: syn4584500
     keep-local: True
+    paired: False
+    stranded: Second
 samtofastq:
 urqt:
     metricsTable: syn4616136    
@@ -29,7 +31,6 @@ featurecounts:
     output: syn4584500
     metricsTable: syn4601557
     count-unit: gene
-    strand: no
     annotations:
 
 
