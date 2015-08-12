@@ -1,18 +1,17 @@
 system:
-# System paths
     workerUserName: ubuntu
     sailfishPath: /home/ubuntu/bin/Sailfish-0.6.3-Linux_x86-64
     picard: /usr/local/share/java/picard-1.96/
     headNFSPath: /home/cbl_data/
     localWDPath: /home/cbl2/ # Execution node wd on cloudbiolinux
 workflow:
-# workflow parameters
     threads: 4
     output: syn4584500
     keep-local: True
     paired: False
     stranded: Second
 samtofastq:
+    unmapped: external
 urqt:
     metricsTable: syn4616136    
 star:
