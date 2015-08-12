@@ -57,26 +57,42 @@ print >> commandsFile, '%s' % localInputFilePath
 
 ## Run workflow
 
+
+### SamtoFastq
 if config['workflow']['paired'] is False:
 	R1file = os.path.join(wd, prefix + '_SE.fastq')
-	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp'), '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=/dev/stdin FASTQ=', R1file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT'])
+	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout FASTQ=', R1file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT', '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=/dev/stdin SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp')])
 
 	if not os.path.exists(R1file):
 		print >> commandsFile, '%s' % cmd
 		subprocess.call(cmd, shell = True)
 	elif args.debug is True:
 		print >> commandsFile, '%s' % cmd
-
 else:
 	R1file = os.path.join(wd, prefix + '_R1.fastq')
 	R2file = os.path.join(wd, prefix + '_R2.fastq')
-	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp'), '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=/dev/stdin FASTQ=', R1file, 'SECOND_END_FASTQ=', R2file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT'])
+	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout FASTQ=', R1file, 'SECOND_END_FASTQ=', R2file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT', '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=/dev/stdin SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp')])
 
 	if not os.path.exists(R1file) or not os.path.exists(R2file):
 		print >> commandsFile, '%s' % cmd
 		subprocess.call(cmd, shell = True)
 	elif args.debug is True:
 		print >> commandsFile, '%s' % cmd
+
+
+### Handle unmapped reads in separate file, only works for SE data currently
+if config['samtofastq']['unmapped'] is 'external':
+	for submission in syn.getSubmissions(args.eval, status='RECEIVED'):
+		fqName = submission['name']
+		if prefix.startswith(fqName.split('.')[0]): # this line needs to be more generic
+			unmappedFastqSubmission = syn.getSubmission(submission, downloadLocation = wd, downloadFile = True)
+			unmappedFastqPath = os.path.join(wd, unmappedFastqSubmission.name)
+			break
+
+	if not os.path.exists(os.path.join(wd, prefix+'_merged.fq')):
+		cmd = ' '.join(['cat', unmappedFastqPath, R1file, '>', os.path.join(wd, prefix+'_merged.fq')])
+		subprocess.call(cmd, shell = True)
+	R1file = os.path.join(wd, prefix + '_merged.fastq')
 
 
 
