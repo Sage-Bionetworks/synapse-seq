@@ -61,7 +61,7 @@ print >> commandsFile, '%s' % localInputFilePath
 ### SamtoFastq
 if config['workflow']['paired'] is False:
 	R1file = os.path.join(wd, prefix + '_SE.fastq')
-	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout FASTQ=', R1file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT', '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=/dev/stdin SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp')])
+	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp'), '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=/dev/stdin FASTQ=', R1file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT'])
 
 	if not os.path.exists(R1file):
 		print >> commandsFile, '%s' % cmd
@@ -71,7 +71,7 @@ if config['workflow']['paired'] is False:
 else:
 	R1file = os.path.join(wd, prefix + '_R1.fastq')
 	R2file = os.path.join(wd, prefix + '_R2.fastq')
-	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout FASTQ=', R1file, 'SECOND_END_FASTQ=', R2file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT', '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=/dev/stdin SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp')])
+	cmd = ' '.join(['java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SortSam.jar'), 'INPUT=', localInputFilePath, 'OUTPUT=/dev/stdout SORT_ORDER=queryname QUIET=true VALIDATION_STRINGENCY=SILENT COMPRESSION_LEVEL=0 TMP_DIR=', os.path.join(wd, 'tmp'), '| java -Xmx2G -jar', os.path.join(config['system']['picard'], 'SamToFastq.jar'), 'INPUT=/dev/stdin FASTQ=', R1file, 'SECOND_END_FASTQ=', R2file, 'TMP_DIR=', os.path.join(wd, 'tmp'), 'VALIDATION_STRINGENCY=SILENT'])
 
 	if not os.path.exists(R1file) or not os.path.exists(R2file):
 		print >> commandsFile, '%s' % cmd
@@ -81,18 +81,26 @@ else:
 
 
 ### Handle unmapped reads in separate file, only works for SE data currently
-if config['samtofastq']['unmapped'] is 'external':
+if config['samtofastq']['unmapped'].strip() == 'external':
 	for submission in syn.getSubmissions(args.eval, status='RECEIVED'):
-		fqName = submission['name']
-		if prefix.startswith(fqName.split('.')[0]): # this line needs to be more generic
+		if submission.name.endswith('fq') and prefix.startswith(submission.name.split('.')[0]): # this line needs to be more generic
 			unmappedFastqSubmission = syn.getSubmission(submission, downloadLocation = wd, downloadFile = True)
 			unmappedFastqPath = os.path.join(wd, unmappedFastqSubmission.name)
+			os.rename(unmappedFastqPath, unmappedFastqPath+'.gz')
 			break
 
 	if not os.path.exists(os.path.join(wd, prefix+'_merged.fq')):
-		cmd = ' '.join(['cat', unmappedFastqPath, R1file, '>', os.path.join(wd, prefix+'_merged.fq')])
+		cmd = ' '.join(['gunzip -c', unmappedFastqPath+'.gz', '| cat - ', R1file, '>', os.path.join(wd, prefix+'_merged.fq')])
+		print >> commandsFile, '%s' % cmd
 		subprocess.call(cmd, shell = True)
-	R1file = os.path.join(wd, prefix + '_merged.fastq')
+	elif args.debug is True:
+		print >> commandsFile, '%s' % cmd
+
+	R1file = os.path.join(wd, prefix+'_merged.fq')
+
+# 	status = syn.getSubmissionStatus(unmappedFastqSubmission)
+# 	status.status = 'ACCEPTED' 
+# 	status = syn.store(status)
 
 
 
@@ -145,9 +153,10 @@ with open(trimOutFile) as metricsFile:
 				metrics.append(vals[1].strip())
 			if len(data_vals) == 2:
 				metrics.append(data_vals[1].strip('()%'))
-		if config['workflow']['paired'] is False:
-			metrics.extend(list('NA', 'NA', 'NA', 'NA', 'NA'))
+	if config['workflow']['paired'] is False:
+		metrics.extend(['NA', 0, 0, 0, 0.0])
 metricsFile.close()
+print >> commandsFile, '%s' % metrics
 syn.store(Table(table, [metrics]))
 
 
@@ -159,7 +168,10 @@ if not os.path.exists(outputDir):
 
 index = os.path.join(config['system']['headNFSPath'], config['star']['index'])
 
-cmd = ' '.join(['STAR --runMode alignReads --runThreadN', str(config['workflow']['threads']), '--genomeDir', index, '--readFilesIn', R1TrimFile, R2TrimFile, '--readFilesCommand zcat --outFileNamePrefix', os.path.join(outputDir,prefix+'.'), '--outSAMtype BAM SortedByCoordinate --outSAMunmapped Within'])
+if config['workflow']['paired'] is False:
+	cmd = ' '.join(['STAR --runMode alignReads --runThreadN', str(config['workflow']['threads']), '--genomeDir', index, '--readFilesIn', R1TrimFile,  '--readFilesCommand zcat --outFileNamePrefix', os.path.join(outputDir,prefix+'.'), '--outSAMtype BAM SortedByCoordinate --outSAMunmapped Within'])
+else:
+	cmd = ' '.join(['STAR --runMode alignReads --runThreadN', str(config['workflow']['threads']), '--genomeDir', index, '--readFilesIn', R1TrimFile, R2TrimFile, '--readFilesCommand zcat --outFileNamePrefix', os.path.join(outputDir,prefix+'.'), '--outSAMtype BAM SortedByCoordinate --outSAMunmapped Within'])
 outBAMfile = os.path.join(outputDir, prefix+'.Aligned.sortedByCoord.out.bam')
 if not os.path.exists(outBAMfile):
 	print >> commandsFile, '%s' % cmd
@@ -174,6 +186,7 @@ outBAMEntity = File(path=outBAMfile, name=os.path.basename(outBAMfile), descript
 outBAMEntity = syn.store(outBAMEntity, forceVersion=False)
 #syn.setAnnotations(outBAMEntity, annotations=config['star']['annotations'])
 print 'new entity id %s' % outBAMEntity.id
+
 
 
 ## Star metrics
@@ -289,7 +302,7 @@ print 'Loading %s to Synapse.' % outCountsFile
 outCountsEntity = File(path=outCountsFile, name=os.path.basename(outCountsFile), description='Gene or exon counts based on alignment to human genome.', parentId=config['featurecounts']['output'], synapseStore=True)	
 outCountsEntity = syn.store(outCountsEntity, forceVersion=False, activityName='Quantitation', activityDescript='Counting reads that align to gene models.', used=[config['featurecounts']['ref']], executed=[cf.id, 'syn2807330'])
 outCountsEntity = syn.store(outCountsEntity, forceVersion=False, activityName='Quantitation', activityDescript='Counting reads that align to gene models.', used=[outBAMEntity, config['featurecounts']['ref']], executed=[cf.id, 'syn2807330'])
-#syn.setAnnotations(outCountsEntity, annotations=config['featurecounts']['annotations'])
+syn.setAnnotations(outCountsEntity, annotations=config['featurecounts']['annotations'])
 print 'new entity id %s' % outCountsEntity.id
 
  
