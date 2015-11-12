@@ -48,6 +48,8 @@ submission = syn.getSubmission(args.submission, downloadFile = False)
 localInputFilePath = os.path.join(wd, submission.name)
 if not os.path.exists(localInputFilePath):
 	submission = syn.getSubmission(args.submission, downloadFile = True, downloadLocation = wd)
+	if not localInputFilePath == submission.filePath:
+		localInputFilePath = submission.filePath
 prefix = os.path.basename(localInputFilePath).rstrip('.bam')
 cfPath = os.path.join(wd, '_'.join([prefix, evaluation.name, 'commands.txt']))
 commandsFile = open(os.path.join(wd, cfPath),'w')
@@ -82,9 +84,9 @@ else:
 
 ### Handle unmapped reads in separate file, only works for SE data currently
 if config['samtofastq']['unmapped'].strip() == 'external':
-	for submission in syn.getSubmissions(args.eval, status='RECEIVED'):
-		if submission.name.endswith('fq') and prefix.startswith(submission.name.split('.')[0]): # this line needs to be more generic
-			unmappedFastqSubmission = syn.getSubmission(submission, downloadLocation = wd, downloadFile = True)
+	for fastqSubmission in syn.getSubmissions(args.eval, status='RECEIVED'):
+		if fastqSubmission.name.endswith('fq.gz') and prefix.startswith(fastqSubmission.name.split('.')[0]): # this line needs to be more generic
+			unmappedFastqSubmission = syn.getSubmission(fastqSubmission, downloadLocation = wd, downloadFile = True)
 			unmappedFastqPath = os.path.join(wd, unmappedFastqSubmission.name)
 			os.rename(unmappedFastqPath, unmappedFastqPath+'.gz')
 			break
@@ -98,9 +100,9 @@ if config['samtofastq']['unmapped'].strip() == 'external':
 
 	R1file = os.path.join(wd, prefix+'_merged.fq')
 
-# 	status = syn.getSubmissionStatus(unmappedFastqSubmission)
-# 	status.status = 'ACCEPTED' 
-# 	status = syn.store(status)
+ 	status = syn.getSubmissionStatus(unmappedFastqSubmission)
+ 	status.status = 'ACCEPTED' 
+ 	status = syn.store(status)
 
 
 
