@@ -58,15 +58,6 @@ print >> commandsFile, '%s' % localInputFilePath
 
 
 
-submission = syn.getSubmission(args.bam, downloadFile = False)
-localBAMfilePath = sr.getBAMtoComputeNode(wd=wd,syn=syn,submission=submission,bucket=args.bucket,extKey=args.key)
-prefix = os.path.basename(localBAMfilePath).rstrip('.bam')
-cfPath = os.path.join(wd, '_'.join([prefix, evalName, 'commands.txt']))
-commandsFile = open(os.path.join(wd, cfPath),'w')
-print '%s' % localBAMfilePath	
-
-
-
 ## Get GTF
 gtfEntity = syn.get(config['featurecounts']['gtf'], downloadLocation = config['system']['localWDPath'])
 if gtfEntity.name.endswith('.gz'):
