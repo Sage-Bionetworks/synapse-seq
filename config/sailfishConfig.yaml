@@ -1,0 +1,25 @@
+system:
+    workerUserName: ubuntu
+    sailfishPath: /home/ubuntu/bin/Sailfish-0.6.3-Linux_x86-64
+    picard: /usr/local/share/java/picard-1.96/
+    headNFSPath: /home/cbl_data/
+    localWDPath: /home/cbl2/ # Execution node wd on cloudbiolinux
+workflow:
+    threads: 4
+    output: syn2809438
+    keep-local: True
+    paired: True
+samtofastq:
+sailfish:
+    ref: syn1234567
+    index: some_index_filename
+    output: syn2809438
+    metricsTable: syn2809454
+    params: gene
+    annotations:
+        fileType: quantitation
+        normalized: TPM
+        summaryLevel: transcript
+
+
+

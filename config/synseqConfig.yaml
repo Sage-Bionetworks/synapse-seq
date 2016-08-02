@@ -1,0 +1,36 @@
+system:
+    workerUserName: ubuntu
+    sailfishPath: /home/ubuntu/bin/Sailfish-0.6.3-Linux_x86-64
+    picard: /usr/local/share/java/picard-1.96/
+    headNFSPath: /home/cbl_data/
+    localWDPath: /home/cbl2/ # Execution node wd on cloudbiolinux
+workflow:
+    threads: 4
+    output: syn4584500
+    keep-local: True
+    paired: False
+    stranded: Second
+samtofastq:
+    unmapped: external
+urqt:
+    metricsTable: syn4616136    
+star:
+    ref: syn4311922
+    index: Hsapiens_GRCh38/star_index/Gencode_RL100/
+    output: syn4584500
+    metricsTable: syn4584502
+    annotations:
+picardRNA:
+    metricsTable: syn4597336
+    refflat: gencode.v22.chr_patch_hapl_scaff.annotation.refFlat.txt
+    rRNAintervals: rRNA_intervals.sam_list
+featurecounts:
+    ref: syn1234567
+    gtf: gencode.v22.chr_patch_hapl_scaff.annotation.gtf
+    output: syn4584500
+    metricsTable: syn4601557
+    count-unit: gene
+    annotations:
+
+
+
