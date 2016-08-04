@@ -1,12 +1,12 @@
 """
-Functions for running sequencing workflows using Synapse.
+Functions for Synapse interactions of seq workflows.
 
 """
 
-# TODO unit tests
 
-import synapseclient, os, argparse, sys, subprocess, hashlib, shutil
-import seq_loading as sl
+import synapseclient
+import hashlib
+import os
 
 
 def getBAMs(projectOrFolderID, syn):
@@ -18,8 +18,6 @@ def getBAMs(projectOrFolderID, syn):
 		BAMfolderID = container.id	
 	# If not, get ID of BAM folder for this container
 	else:
-		allFoldersDict = sl.getExistingFolders(syn,container.id)
-		BAMfolderID = allFoldersDict['BAM']
 	
 	BAMEntityList = list()
 	print 'BAM folder ID: %s' % BAMfolderID
@@ -32,29 +30,6 @@ def getBAMs(projectOrFolderID, syn):
 	
 	return(BAMEntityList)
 	
-
-
-def runJobsForSubmissions(submission, evalCode, logsDir, outputProjectID, commandLineParams, syn, externalBucket=None):
-	'''	Checks for new submissions and runs corresponding evaluation jobs. Requires qsub.'''
-
-	# Hardcoded: path to python in qsub statement.
-	profile = syn.getUserProfile() 
-	status = syn.getSubmissionStatus(submission)
-	if status.status == 'OPEN':
-
-		if externalBucket[0] is not None:
-			print 'external bucket %s' % externalBucket[0]
-### Change this to give submission object to qsub after get the ability to getSubmissions, downloadFile = False
-			cmd = ' '.join(['qsub -N count -o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', evalCode, '--input', submission.entityId, '--output', outputProjectID[0], '--bucket', externalBucket[0]])
-		else:
-			cmd = ' '.join(['qsub -N count -o', os.path.join(logsDir, '$JOB_NAME.$JOB_ID'), '-j y -S /usr/bin/python -V', evalCode, '--input', submission.entityId, '--output', outputProjectID])
-
-		print '%s' % cmd
-#			subprocess.call(cmd, shell = True)
-
-#		status.status = 'SCORED' # Scored is functioning as "pending" for now.
-#		status = syn.store(status)
-
 
 
 # This function code from Chris Bare
@@ -73,75 +48,6 @@ def calc_md5(inFile):
 	return(md5.hexdigest())
 
 
-def locateRefOnHeadNode(ref,headNFSPath, syn):
-	'''Locate reference on head node NFS.'''
-
-	if ref.startswith('syn'):
-		refEntity = syn.get(entity=ref, downloadFile = False)
-		refName = refEntity.name
-	else: # for external links
-		refName = os.path.basename(ref)
-	reference = os.path.join(headNFSPath, refName)
-	if not os.path.exists(reference):
-		sys.exit("ERROR: Can't locate reference.")
-	return(reference)
-
-
-def copyRefToWorkerNode(ref,headNFSPath,localPath, syn):
-	'''Copy reference from head node NFS to worker.'''
-	
-	refOnHead = locateRefOnHeadNode(ref=ref,headNFSPath=headNFSPath,syn=syn)
-	localRefPath = os.path.join(localPath,os.path.basename(refOnHead))
-	if not os.path.exists(localRefPath) and not os.path.isdir(localRefPath.strip('.tar.bz2')):
-		shutil.copy(refOnHead, localPath)
-		if localRefPath.endswith('.tar.bz2'):
-			cmd = ' '.join(['tar -xvjf', localRefPath, '-C', localPath])
-			subprocess.call(cmd, shell=True)
-			zipPath = localRefPath
-			localRefPath = zipPath.strip('.tar.bz2')
-	return(localRefPath)
-
-
-def getBAMtoComputeNode(wd,syn,submission=None,bucket=None,extKey=None,public=False):
-	'''Locate BAM on node, copying from synapse or S3 if necessary.'''
-
-	localBAMfilePath = ''
-	if bucket is not None:
-		if public is True: # using boto, requires boto credentials file locally
-			import boto
-			s3 = boto.connect_s3()
-			external_bucket = s3.get_bucket(bucket) 
-			bucketItem = external_bucket.get_key(extKey)
-			localBAMfilePath = os.path.join(wd, os.path.basename(extKey))
-			if not os.path.exists(localBAMfilePath):
-				print 'Getting data in bucket %s' % bucket
-				bucketItem.get_contents_to_filename(localBAMfilePath)	
-		else: # using AWS CLI, requires IAM roles giving acces to EC2 instance
-			localBAMfilePath = os.path.join(wd, os.path.basename(extKey))
-			cmd = ''.join(['aws s3 cp s3://', bucket, '/', extKey, ' ', localBAMfilePath])
-			#if not os.path.exists(localBAMfilePath):
-			print '%s' % cmd
-			subprocess.call(cmd, shell=True)	
-	else:
-		localBAMfilePath = os.path.join(wd, submission.name)
-		if not os.path.exists(localBAMfilePath):
-			print 'Will download %s from synapse.' % submission.name
-			BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = True, downloadLocation = wd)
-			if calc_md5(localBAMfilePath).upper() != BAMentity.md5.upper():
-				os.remove(localBAMfilePath)
-				sys.exit(' '.join(['ERROR: MD5 of %s does not match md5 in synapse.', submission.name]))
-		else:
-			BAMentity = syn.get(entity=submission.entityId, version=submission.versionNumber, downloadFile = False, downloadLocation = wd)
-	return(localBAMfilePath)
-
-
-
-def getSynConfigFromHead(localPath,headPath):
-	'''Copy Synapse config file from head to worker node, if necessary.'''
-
-	if not os.path.exists(os.path.join(localPath, '.synapseConfig')):
-		shutil.copy(os.path.join(headPath, '.synapseConfig'), localPath)
-
 
 def getSubmittedBAM(evalID,syn): 
 	'''Get dictionary of all BAMs submitted to given eval.'''
@@ -154,6 +60,33 @@ def getSubmittedBAM(evalID,syn):
 	return(submittedEntities)
 	
 
+def getSubmission(submissionID,wd,syn):
+	'''Downloads submission entity.'''
+
+	submission = syn.getSubmission(submissionID, downloadFile = False)
+	localInputFilePath = os.path.join(wd, submission.name)
+	if not os.path.exists(localInputFilePath):
+		submission = syn.getSubmission(args.submission, downloadFile = True, downloadLocation = wd)
+	return(submission)
+
+
+def makeCommandFile(prefix,wd,syn):
+
+	cfPath = os.path.join(wd, '_'.join([prefix, 'commands.txt']))
+	commandsFile = open(os.path.join(wd, cfPath),'w')
+	return(commandsFile)
+	
+def storeCommandFile(cfHandle,wd,syn):
+
+	cfHandle.close()
+	cfEntity = File(path=os.path.join(wd, cfHandle.name), description='Job commands.', parentId=config['workflow']['output'], synapseStore=True)
+	cfEntity = syn.store(cfEntity)
+	return(cfEntity)
+
+	
+
+
+
 
 #if __name__ == "__main__":
-	#put test code here?				
+	#put test code here
