@@ -16,10 +16,10 @@ from toil.job import Job
 # Workflow functions
 #################
 
-def processInputs(job, args.idFile):
+def processInputs(job, idFile):
 
-	job.fileStore.logToMaster("Opening list of inputs %s" % args.idFile)
-	with open(args.idFile, 'r') as input:
+	job.fileStore.logToMaster("Opening list of inputs %s" % idFile)
+	with open(idFile, 'r') as input:
 		for line in input:
 			job.addChildJobFn(makeFastQ,id=line.strip())
 	
@@ -29,23 +29,27 @@ def makeFastQ(job, id, memory="12G",cores=1,disk="30G"):
 	'''Gets input file from Synapse to compute instance.'''
 
 	if args.submission is True:
-		submission = synseq.getSubmission(id,args.wd,syn)
+		submission = syn.getSubmission(args.submission, downloadFile = True, downloadLocation = wd)
 	else:
-		submission = syn.get(id, downloadLocation=args.wd)
+		submission = syn.get(id, downloadLocation=args.wd, downloadFile=True)
+	md5 = syn.utils.md5_for_file(os.path.join(wd,submission.name)).hexdigest()
+	assert(md5 == submission.md5)
+
+	
 	prefix = submission.name.rstrip('.bam')
 	job.fileStore.logToMaster("Downloaded BAM file id: %s, name:" % (submission.id, submission.name))
 
-	cfHandle = synseq.makeCommandFile(prefix,args.wd,syn)
+	cfHandle = synapseseq.synapse_io.makeCommandFile(prefix,args.wd,syn)
 	
 	job.fileStore.logToMaster("Running samtoFastQ: %s" % submission.id)
 	(R1file, R2file) = samToFastq(os.path.join(args.wd, submission.name),args.wd,commandsFile=cfHandle)
 	
-	return job.addFollowOnJobFn(quantReads, R1file=R1file, R2file=R2file, submission=submission, cfHandle=cfHandle)
+	return job.addFollowOnJobFn(quantReads, R1file=R1file, R2file=R2file, submission=submission, cfHandle=cfHandle, cores=config['workflow']['threads'])
 
 
 	
 	
-def quantReads(job, R1file,R2file,prefix,submission,cfHandle, memory="3G",cores=config['workflow']['threads'],disk="500M"):
+def quantReads(job, R1file,R2file,prefix,submission,cfHandle, memory="3G",cores="4",disk="500M"):
 
 	job.fileStore.logToMaster("Running sailfish: %s" % submission.id)
 	sailResultsFile = runSailfish(prefix=prefix,wd=args.wd,R1=R1file,R2=R2file,commandsFile=cfHandle)
@@ -60,14 +64,16 @@ def quantReads(job, R1file,R2file,prefix,submission,cfHandle, memory="3G",cores=
 
 	## Set up provenance
 	job.fileStore.logToMaster("Setting up provenance: %s" % submission.id)
-	cfEntity = synseq.storeCommandFile(prefix=prefix,wd=args.wd,syn)
+	cfEntity = synapseseq.synapse_io.storeCommandFile(prefix=prefix,wd=args.wd,syn=syn)
 
 	sailfishAct = Activity(name='Sailfish', description='Quantitate sequencing reads to gene models.', executed=[cfEntity.id])
 	sailfishAct.used({'reference':{'targetId':submission.entityId, 'targetVersionNumber':submission.versionNumber}})
-	sailfishAct.used(config['sailfish']['reference'])
+	sailfishAct.used(config['sailfish']['referenceID'])
 
 	syn.setProvenance(sailResultsEntity, sailfishAct) 
 	
+	if args.submission is True:
+		return(job.addFollowOnJobFn(changeStatus, submission=submission))
 
 
 
@@ -104,4 +110,4 @@ if __name__=="__main__":
 
 		
 	## Start workflow	
-	Job.Runner.startToil(Job.wrapJobFn(processInputs, args.idFile))
+	Job.Runner.startToil(Job.wrapJobFn(processInputs, idFile=args.idFile))

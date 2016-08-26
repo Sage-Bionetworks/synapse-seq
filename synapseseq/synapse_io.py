@@ -17,7 +17,6 @@ def getBAMs(projectOrFolderID, syn):
 	if container.name == 'BAM':
 		BAMfolderID = container.id	
 	# If not, get ID of BAM folder for this container
-	else:
 	
 	BAMEntityList = list()
 	print 'BAM folder ID: %s' % BAMfolderID
